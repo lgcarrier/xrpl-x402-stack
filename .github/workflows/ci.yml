@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Compile source files
+        run: PYTHONPYCACHEPREFIX=/tmp/pycache python -m compileall app tests
+
+      - name: Run pytest
+        run: PYTHONPYCACHEPREFIX=/tmp/pycache pytest -q
+
+      - name: Build Docker image
+        run: docker build -t xrpl-x402-facilitator:ci .
+
+      - name: Verify Docker image runs as non-root and excludes local artifacts
+        run: |
+          docker run --rm xrpl-x402-facilitator:ci \
+            python -c "import os, pathlib; assert os.getuid() != 0, 'container runs as root'; forbidden = [path for path in ('/app/.git', '/app/.env', '/app/.live-test-wallets') if pathlib.Path(path).exists()]; assert not forbidden, f'unexpected files in image: {forbidden}'"
