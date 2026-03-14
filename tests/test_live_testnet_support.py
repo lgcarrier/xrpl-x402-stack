@@ -82,7 +82,7 @@ def test_recover_tracked_claim_wallets_sweeps_and_deletes_wallet(tmp_path, monke
     monkeypatch.setattr(
         support,
         "get_validated_trustline",
-        lambda _client, address, _issuer: trustlines[address],
+        lambda _client, address, _issuer, currency_code="RLUSD": trustlines[address],
     )
 
     def fake_submit_payment(_client, wallet, destination_address, _issuer, amount):
@@ -173,7 +173,11 @@ def test_recover_tracked_claim_wallets_leaves_wallet_pending_delete_until_eligib
             "ledger_index": 500,
         },
     )
-    monkeypatch.setattr(support, "get_validated_trustline", lambda _client, _address, _issuer: None)
+    monkeypatch.setattr(
+        support,
+        "get_validated_trustline",
+        lambda _client, _address, _issuer, currency_code="RLUSD": None,
+    )
 
     recovered_state, summary = support.recover_tracked_claim_wallets(
         client=None,
@@ -382,3 +386,229 @@ def test_claim_rlusd_topup_records_failed_wallet_on_rate_limit(tmp_path, monkeyp
     assert record.claim_attempted_at == now
     assert record.status == support.CLAIM_WALLET_STATUS_CLAIM_FAILED
     assert record.last_error == "RLUSD faucet rate limited: too soon"
+
+
+def test_write_and_load_usdc_claim_state_round_trip(tmp_path) -> None:
+    claim_state_path = tmp_path / "usdc-claim-state.json"
+    now = datetime(2026, 3, 12, 15, 0, tzinfo=timezone.utc)
+    disposable_wallet = Wallet.create()
+
+    state = support.USDCClaimState(
+        canonical_wallet_address="rCanonical",
+        issuer="rIssuer",
+        last_successful_session_claim_at=now,
+        last_prepared_claim_at=now - timedelta(minutes=5),
+        claim_wallets=[
+            support.USDCClaimWalletState(
+                classic_address=disposable_wallet.classic_address,
+                seed=disposable_wallet.seed,
+                created_at=now - timedelta(minutes=10),
+                trustline_create_tx_hash="TRUSTTX",
+            )
+        ],
+    )
+
+    support.write_usdc_claim_state(claim_state_path, state)
+    loaded = support.load_usdc_claim_state(claim_state_path, "rCanonical", "rIssuer")
+
+    assert loaded.canonical_wallet_address == "rCanonical"
+    assert loaded.issuer == "rIssuer"
+    assert loaded.last_successful_session_claim_at == now
+    assert loaded.last_prepared_claim_at == now - timedelta(minutes=5)
+    assert loaded.claim_wallets[0].classic_address == disposable_wallet.classic_address
+    assert loaded.claim_wallets[0].trustline_create_tx_hash == "TRUSTTX"
+    assert loaded.claim_wallets[0].status == support.CLAIM_WALLET_STATUS_AWAITING_MANUAL_FUNDING
+
+
+def test_recover_tracked_usdc_claim_wallets_sweeps_and_deletes_wallet(tmp_path, monkeypatch) -> None:
+    claim_state_path = tmp_path / "usdc-claim-state.json"
+    accumulator_wallet = Wallet.create()
+    disposable_wallet = Wallet.create()
+    now = datetime(2026, 3, 12, 15, 0, tzinfo=timezone.utc)
+
+    state = support.USDCClaimState(
+        canonical_wallet_address=accumulator_wallet.classic_address,
+        issuer="rIssuer",
+        claim_wallets=[
+            support.USDCClaimWalletState(
+                classic_address=disposable_wallet.classic_address,
+                seed=disposable_wallet.seed,
+                created_at=now - timedelta(hours=1),
+                status=support.CLAIM_WALLET_STATUS_AWAITING_MANUAL_FUNDING,
+            )
+        ],
+    )
+    support.write_usdc_claim_state(claim_state_path, state)
+
+    trustlines: dict[str, dict[str, str] | None] = {
+        accumulator_wallet.classic_address: {"balance": "0", "limit": "100000", "account": "rIssuer", "currency": "USDC"},
+        disposable_wallet.classic_address: {"balance": "7.5", "limit": "100000", "account": "rIssuer", "currency": "USDC"},
+    }
+    xrp_balances = {
+        accumulator_wallet.classic_address: 0,
+        disposable_wallet.classic_address: 99_999_970,
+    }
+
+    monkeypatch.setattr(support, "ensure_usdc_trustline", lambda _client, _wallet, _issuer: None)
+    monkeypatch.setattr(
+        support,
+        "get_validated_account_root",
+        lambda _client, address: {
+            "account_data": {"Balance": str(xrp_balances[address]), "Sequence": "100"},
+            "ledger_index": 400,
+        },
+    )
+    monkeypatch.setattr(
+        support,
+        "get_validated_trustline",
+        lambda _client, address, _issuer, currency_code="RLUSD": trustlines[address],
+    )
+
+    def fake_submit_payment(_client, wallet, destination_address, _issuer, amount):
+        trustlines[wallet.classic_address] = {"balance": "0", "limit": "100000", "account": "rIssuer", "currency": "USDC"}
+        trustlines[destination_address] = {
+            "balance": str(Decimal(trustlines[destination_address]["balance"]) + amount),
+            "limit": "100000",
+            "account": "rIssuer",
+            "currency": "USDC",
+        }
+        return "SWEEPTX"
+
+    monkeypatch.setattr(support, "submit_validated_usdc_payment", fake_submit_payment)
+    monkeypatch.setattr(
+        support,
+        "wait_for_trustline_balance_increase",
+        lambda _client, address, _issuer, *, starting_balance, increase, timeout_seconds=30, currency_code="RLUSD": (
+            Decimal(trustlines[address]["balance"])
+        ),
+    )
+    monkeypatch.setattr(
+        support,
+        "reset_usdc_trustline",
+        lambda _client, wallet, _issuer: (
+            trustlines.__setitem__(
+                wallet.classic_address,
+                {"balance": "0", "limit": "0", "account": "rIssuer", "currency": "USDC"},
+            )
+            or "RESETTX"
+        ),
+    )
+    monkeypatch.setattr(
+        support,
+        "wait_for_trustline_removal",
+        lambda _client, address, _issuer, timeout_seconds=30, currency_code="RLUSD": trustlines.__setitem__(address, None) is None,
+    )
+    monkeypatch.setattr(support, "submit_validated_account_delete", lambda _client, _wallet, _destination: "DELETETX")
+
+    recovered_state, summary = support.recover_tracked_usdc_claim_wallets(
+        client=None,
+        accumulator_wallet=accumulator_wallet,
+        issuer="rIssuer",
+        claim_state_file=claim_state_path,
+        now=now,
+    )
+
+    record = recovered_state.claim_wallets[0]
+    assert summary.recovered_usdc_amount == Decimal("7.5")
+    assert summary.deleted_wallets == 1
+    assert recovered_state.last_successful_session_claim_at == now
+    assert record.status == support.CLAIM_WALLET_STATUS_DELETED
+    assert record.usdc_sweep_tx_hash == "SWEEPTX"
+    assert record.trustline_reset_tx_hash == "RESETTX"
+    assert record.account_delete_tx_hash == "DELETETX"
+    assert record.last_known_usdc_balance == Decimal("0")
+    assert record.last_known_xrp_balance_drops == 0
+    assert record.deleted_at == now
+
+
+def test_prepare_usdc_topup_honors_local_cooldown(tmp_path, monkeypatch) -> None:
+    claim_state_path = tmp_path / "usdc-claim-state.json"
+    wallets = support.LiveWalletPair(wallet_a=Wallet.create(), wallet_b=Wallet.create())
+    previous_claim_at = datetime(2026, 3, 12, 13, 30, tzinfo=timezone.utc)
+    now = datetime(2026, 3, 12, 15, 0, tzinfo=timezone.utc)
+
+    monkeypatch.setattr(
+        support,
+        "recover_tracked_usdc_claim_wallets",
+        lambda _client, _accumulator_wallet, _issuer, claim_state_file=None, now=None: (
+            support.USDCClaimState(
+                canonical_wallet_address=wallets.wallet_a.classic_address,
+                issuer="rIssuer",
+                last_successful_session_claim_at=previous_claim_at,
+            ),
+            support.USDCClaimRecoverySummary(),
+        ),
+    )
+    monkeypatch.setattr(support, "ensure_usdc_trustline", lambda _client, _wallet, _issuer: None)
+    created_wallet = {"value": False}
+    monkeypatch.setattr(
+        support,
+        "generate_faucet_wallet",
+        lambda *_args, **_kwargs: created_wallet.__setitem__("value", True),
+    )
+
+    result = support.prepare_usdc_topup(
+        client=None,
+        wallets=wallets,
+        issuer="rIssuer",
+        now=now,
+        claim_state_file=claim_state_path,
+    )
+
+    assert result.status == "cooldown"
+    assert result.cooldown_until == previous_claim_at + timedelta(hours=2)
+    assert created_wallet["value"] is False
+
+
+def test_prepare_usdc_topup_creates_claim_wallet_and_persists_manual_instructions(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    claim_state_path = tmp_path / "usdc-claim-state.json"
+    wallets = support.LiveWalletPair(wallet_a=Wallet.create(), wallet_b=Wallet.create())
+    disposable_wallet = Wallet.create()
+    now = datetime(2026, 3, 12, 15, 0, tzinfo=timezone.utc)
+
+    monkeypatch.setattr(
+        support,
+        "recover_tracked_usdc_claim_wallets",
+        lambda _client, _accumulator_wallet, _issuer, claim_state_file=None, now=None: (
+            support.USDCClaimState(
+                canonical_wallet_address=wallets.wallet_a.classic_address,
+                issuer="rIssuer",
+            ),
+            support.USDCClaimRecoverySummary(recovered_usdc_amount=Decimal("2.25")),
+        ),
+    )
+
+    def fake_ensure(_client, wallet, _issuer, limit_value="100000"):
+        if wallet.classic_address == wallets.wallet_a.classic_address:
+            return None
+        return "TRUSTTX"
+
+    monkeypatch.setattr(support, "ensure_usdc_trustline", fake_ensure)
+    monkeypatch.setattr(support, "generate_faucet_wallet", lambda *_args, **_kwargs: disposable_wallet)
+
+    result = support.prepare_usdc_topup(
+        client=None,
+        wallets=wallets,
+        issuer="rIssuer",
+        now=now,
+        claim_state_file=claim_state_path,
+    )
+
+    persisted_state = support.load_usdc_claim_state(
+        claim_state_path,
+        wallets.wallet_a.classic_address,
+        "rIssuer",
+    )
+    record = persisted_state.claim_wallets[0]
+
+    assert result.status == "awaiting_manual_claim"
+    assert result.swept_amount == Decimal("2.25")
+    assert result.created_claim_wallet_address == disposable_wallet.classic_address
+    assert "faucet.circle.com" in result.message
+    assert persisted_state.last_prepared_claim_at == now
+    assert record.classic_address == disposable_wallet.classic_address
+    assert record.trustline_create_tx_hash == "TRUSTTX"
+    assert record.status == support.CLAIM_WALLET_STATUS_AWAITING_MANUAL_FUNDING

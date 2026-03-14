@@ -7,8 +7,8 @@
 **A self-hosted x402 facilitator for the XRP Ledger.**
 
 This project verifies and settles **presigned XRPL Payment transactions** so an
-API can accept **XRP** and XRPL-issued assets such as **RLUSD** without taking
-custody of user funds.
+API can accept **XRP** and built-in XRPL-issued assets such as **RLUSD** and
+**USDC** without taking custody of user funds.
 
 It is designed for teams that want to price API access in small on-chain
 payments while keeping their payment infrastructure simple, auditable, and
@@ -22,7 +22,7 @@ stateless.
 - [When To Use This](#when-to-use-this)
 - [When Not To Use This](#when-not-to-use-this)
 - [Why XRPL Is A Good Fit](#why-xrpl-is-a-good-fit)
-- [XRP And RLUSD Support](#xrp-and-rlusd-support)
+- [XRP, RLUSD, And USDC Support](#xrp-rlusd-and-usdc-support)
 - [Trust And Custody Model](#trust-and-custody-model)
 - [Current Feature Set](#current-feature-set)
 - [Current Limitations](#current-limitations)
@@ -176,7 +176,7 @@ efficiently with predictable transaction behavior.
 For API operators, the relevant properties are:
 
 - native XRP support
-- issued currency support, including assets such as RLUSD
+- issued currency support, including assets such as RLUSD and USDC
 - deterministic transaction structure
 - transaction hashes and ledger validation status
 - simple payment semantics for direct merchant receipt
@@ -184,30 +184,34 @@ For API operators, the relevant properties are:
 This project uses `xrpl-py` to decode, verify, and submit standard XRPL payment
 transactions.
 
-## XRP And RLUSD Support
+## XRP, RLUSD, And USDC Support
 
 The facilitator supports:
 
 - **XRP**, represented as drops in the transaction amount field
-- **issued currencies**, such as **RLUSD**, represented as XRPL issued-asset
-  amounts with explicit issuer matching
+- **issued currencies**, such as **RLUSD** and **USDC**, represented as XRPL
+  issued-asset amounts with explicit issuer matching
 
 The service treats XRP and issued currencies differently only where XRPL itself
 does. XRP minimum enforcement is controlled through `MIN_XRP_DROPS`, while
 issued assets must be strictly positive and are matched against `(currency,
 issuer)` pairs.
 
-Built-in RLUSD support is network-aware:
+Built-in issued-asset support is network-aware:
 
 - `xrpl:0` uses issuer `rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De`
+  for `RLUSD` and issuer `rGm7WCVp9gb4jZHWTEtGUr4dd74z2XuWhE` for `USDC`
 - `xrpl:1` uses issuer `rnEVYfAWYP5HpPaWQiPSJMyDeUiEJ6zhy2`
+  for `RLUSD` and issuer `rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt` for `USDC`
 
-The facilitator also normalizes RLUSD from either the human-readable code
-`RLUSD` or the XRPL hex currency code
-`524C555344000000000000000000000000000000`.
+The facilitator also normalizes issued currencies from either the
+human-readable code or the XRPL hex currency code. That includes:
 
-If you use RLUSD or another issued asset in production, remember that your
-walleting and treasury setup still needs the normal XRPL issuer/trust-line
+- `RLUSD` or `524C555344000000000000000000000000000000`
+- `USDC` or `5553444300000000000000000000000000000000`
+
+If you use RLUSD, USDC, or another issued asset in production, remember that
+your walleting and treasury setup still needs the normal XRPL issuer/trust-line
 considerations outside this service.
 
 ## Trust And Custody Model
@@ -327,6 +331,7 @@ What each variable means:
 - `VALIDATION_TIMEOUT`: max number of seconds to wait for validated settlement
 - `MIN_XRP_DROPS`: minimum acceptable XRP amount in drops
 - `ALLOWED_ISSUED_ASSETS`: optional extra issued assets in `CODE:ISSUER` format
+  beyond the built-in XRP, RLUSD, and USDC support
 - `ENABLE_API_DOCS`: set to `true` only when you want `/docs`, `/redoc`, and
   `/openapi.json` exposed for local development or a trusted internal network
 - `MAX_REQUEST_BODY_BYTES`: maximum size accepted for `POST /verify` and
@@ -341,8 +346,8 @@ after XRPL validation is confirmed.
 
 `optimistic` is lower-latency but shifts more settlement risk to the caller.
 
-RLUSD is built in automatically for `xrpl:0` and `xrpl:1`, and additional
-issued assets remain opt-in through `ALLOWED_ISSUED_ASSETS`.
+RLUSD and USDC are built in automatically for `xrpl:0` and `xrpl:1`, and any
+additional issued assets remain opt-in through `ALLOWED_ISSUED_ASSETS`.
 
 Replay protection now always uses Redis. That means the same replay behavior is
 used for local runs, single-token deployments, and `redis_gateways`
@@ -461,7 +466,8 @@ Example response:
   "network": "xrpl:0",
   "assets": [
     {"code": "XRP", "issuer": null},
-    {"code": "RLUSD", "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"}
+    {"code": "RLUSD", "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"},
+    {"code": "USDC", "issuer": "rGm7WCVp9gb4jZHWTEtGUr4dd74z2XuWhE"}
   ],
   "settlement_mode": "validated"
 }
@@ -578,7 +584,8 @@ Example response:
   "network": "xrpl:0",
   "assets": [
     {"code": "XRP", "issuer": null},
-    {"code": "RLUSD", "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"}
+    {"code": "RLUSD", "issuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"},
+    {"code": "USDC", "issuer": "rGm7WCVp9gb4jZHWTEtGUr4dd74z2XuWhE"}
   ],
   "settlement_mode": "validated"
 }
@@ -772,6 +779,13 @@ RUN_XRPL_TESTNET_LIVE=1 \
 pytest -m live tests/integration/test_live_testnet.py -k rlusd -s
 ```
 
+Run the live USDC flow:
+
+```bash
+RUN_XRPL_TESTNET_LIVE=1 \
+pytest -m live tests/integration/test_live_testnet.py -k usdc -s
+```
+
 Top up the cached RLUSD wallet outside the live test with the optional devtool:
 
 ```bash
@@ -783,6 +797,18 @@ Optional override if the faucet rotates the current XRPL Testnet RLUSD issuer:
 
 ```bash
 XRPL_TESTNET_RLUSD_ISSUER=rCurrentIssuerAddress
+```
+
+Prepare the cached USDC wallet for a manual Circle faucet claim:
+
+```bash
+python -m devtools.usdc_topup
+```
+
+Optional override if the Circle XRPL Testnet issuer changes:
+
+```bash
+XRPL_TESTNET_USDC_ISSUER=rCurrentIssuerAddress
 ```
 
 Optional override for the local wallet cache path:
@@ -799,6 +825,14 @@ every disposable claim wallet and its recovery status, skips remote claims for
 24 hours after a successful top-up, and still relies on `tryrlusd.com` as the
 source of truth for actual faucet eligibility.
 
+The local USDC top-up helper is also only for local live-test workflows. It
+writes claim metadata next to the wallet cache at
+`.live-test-wallets/usdc-claim-state.json` by default, prepares one disposable
+XRP-funded claim wallet at a time, enforces a conservative 2-hour local
+cooldown after a successful USDC recovery, and prints manual instructions for
+claiming 20 XRPL Testnet USDC from [Circle Faucet](https://faucet.circle.com/)
+because that flow is browser/reCAPTCHA protected.
+
 The live tests:
 
 - uses the XRPL Testnet faucet
@@ -806,8 +840,12 @@ The live tests:
 - signs and settles a real XRP payment
 - can sign and settle a real RLUSD payment without re-claiming when the cached
   wallets already hold enough RLUSD
+- can sign and settle a real USDC payment without re-preparing a faucet wallet
+  when the cached wallets already hold enough USDC
 - can accumulate RLUSD locally across days by reusing the cached wallet pair
   and the local top-up helper
+- can accumulate USDC locally across runs by reusing the cached wallet pair and
+  tracked manual-claim wallets
 - verifies the live payment through the facilitator
 - confirms the destination balance increase
 - checks replay rejection after settlement
@@ -832,6 +870,25 @@ The RLUSD flow also:
   not hold enough RLUSD after tracked-wallet recovery
 - may leave a disposable claim wallet in the local ledger until XRPL allows
   `AccountDelete`; later helper runs retry deletion and recover the wallet's XRP
+
+The USDC flow also:
+
+- reuses USDC already held by the cached wallets and flips sender/receiver as
+  balances move
+- recovers tracked disposable claim wallets before the live facilitator flow so
+  previously unswept USDC and XRP can return to the accumulator
+- sweeps USDC back into the cached primary wallet after a successful live USDC
+  round trip
+- creates live trustlines on XRPL Testnet only when needed
+- uses the local helper to create one disposable XRP-funded claim wallet with a
+  USDC trustline, then asks you to claim 20 USDC manually from Circle Faucet
+- enforces a conservative 2-hour local cooldown after a successful USDC
+  recovery, even though Circle documents its faucet limit per address
+- relies on built-in USDC support by default, but can temporarily add
+  `ALLOWED_ISSUED_ASSETS=USDC:<issuer>` when `XRPL_TESTNET_USDC_ISSUER`
+  overrides the built-in testnet issuer
+- skips with helper guidance when the cached primary/secondary wallets still do
+  not hold enough USDC after tracked-wallet recovery
 
 Delete the wallet cache file if you want a fresh Testnet pair.
 

@@ -9,11 +9,19 @@ RLUSD_CODE = "RLUSD"
 RLUSD_HEX = "524C555344000000000000000000000000000000"
 RLUSD_MAINNET_ISSUER = "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De"
 RLUSD_TESTNET_ISSUER = "rnEVYfAWYP5HpPaWQiPSJMyDeUiEJ6zhy2"
+USDC_CODE = "USDC"
+USDC_HEX = "5553444300000000000000000000000000000000"
+USDC_MAINNET_ISSUER = "rGm7WCVp9gb4jZHWTEtGUr4dd74z2XuWhE"
+USDC_TESTNET_ISSUER = "rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt"
 TF_PARTIAL_PAYMENT = 0x00020000
 
 NETWORK_RLUSD_ISSUERS = {
     "xrpl:0": RLUSD_MAINNET_ISSUER,
     "xrpl:1": RLUSD_TESTNET_ISSUER,
+}
+NETWORK_USDC_ISSUERS = {
+    "xrpl:0": USDC_MAINNET_ISSUER,
+    "xrpl:1": USDC_TESTNET_ISSUER,
 }
 
 _XRP_DROPS_PER_XRP = Decimal("1000000")
@@ -78,11 +86,17 @@ def supported_asset_keys(network_id: str, raw_assets: str) -> list[AssetKey]:
     supported_assets = [AssetKey(code=XRP_CODE, issuer=None)]
     seen_assets = {supported_assets[0]}
 
-    built_in_rlusd_issuer = NETWORK_RLUSD_ISSUERS.get(network_id)
-    if built_in_rlusd_issuer:
-        built_in_rlusd = AssetKey(code=RLUSD_CODE, issuer=built_in_rlusd_issuer)
-        supported_assets.append(built_in_rlusd)
-        seen_assets.add(built_in_rlusd)
+    built_in_assets = (
+        (RLUSD_CODE, NETWORK_RLUSD_ISSUERS.get(network_id)),
+        (USDC_CODE, NETWORK_USDC_ISSUERS.get(network_id)),
+    )
+    for code, issuer in built_in_assets:
+        if not issuer:
+            continue
+        asset = AssetKey(code=code, issuer=issuer)
+        if asset not in seen_assets:
+            supported_assets.append(asset)
+            seen_assets.add(asset)
 
     for asset in parse_allowed_issued_assets(raw_assets):
         if asset not in seen_assets:

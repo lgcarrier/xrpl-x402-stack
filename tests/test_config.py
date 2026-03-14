@@ -60,3 +60,9 @@ def test_zero_min_xrp_drops_is_allowed() -> None:
     settings = build_settings(MIN_XRP_DROPS=0)
 
     assert settings.MIN_XRP_DROPS == 0
+
+
+def test_allowed_issued_assets_default_remains_empty() -> None:
+    settings = build_settings()
+
+    assert settings.ALLOWED_ISSUED_ASSETS == ""

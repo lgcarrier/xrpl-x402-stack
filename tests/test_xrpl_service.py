@@ -12,7 +12,7 @@ from xrpl.models.transactions import Payment
 from xrpl.transaction import sign
 from xrpl.wallet import Wallet
 
-from app.assets import RLUSD_HEX, RLUSD_TESTNET_ISSUER
+from app.assets import RLUSD_HEX, RLUSD_TESTNET_ISSUER, USDC_HEX, USDC_TESTNET_ISSUER
 from app.config import Settings
 from app.models import SettleResponse
 from app.replay_store import RedisReplayStore
@@ -171,6 +171,27 @@ def test_verify_normalizes_rlusd_hex_currency_code() -> None:
         "issuer": RLUSD_TESTNET_ISSUER,
     }
     assert response.amount == "1.5 RLUSD"
+    assert response.invoice_id == hashlib.sha256(signed_blob.encode("utf-8")).hexdigest()[:32]
+
+
+def test_verify_normalizes_usdc_hex_currency_code() -> None:
+    service = build_service(MY_DESTINATION_ADDRESS=TEST_VALID_DESTINATION)
+    signed_blob, _tx_hash = build_signed_payment_blob(
+        destination=TEST_VALID_DESTINATION,
+        amount={
+            "currency": USDC_HEX,
+            "issuer": USDC_TESTNET_ISSUER,
+            "value": "2.25",
+        },
+    )
+
+    response = asyncio.run(service.verify_payment(signed_blob))
+
+    assert response.asset.model_dump() == {
+        "code": "USDC",
+        "issuer": USDC_TESTNET_ISSUER,
+    }
+    assert response.amount == "2.25 USDC"
     assert response.invoice_id == hashlib.sha256(signed_blob.encode("utf-8")).hexdigest()[:32]
 
 
@@ -375,6 +396,43 @@ def test_settle_validated_rlusd_payment_accepts_hex_delivered_currency(
                     "currency": RLUSD_HEX,
                     "issuer": RLUSD_TESTNET_ISSUER,
                     "value": "3.75",
+                }
+            },
+        },
+    )
+
+    response = asyncio.run(service.settle_payment(signed_blob))
+
+    assert response.model_dump() == {
+        "settled": True,
+        "tx_hash": tx_hash,
+        "status": "validated",
+    }
+
+
+def test_settle_validated_usdc_payment_accepts_hex_delivered_currency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = build_service(MY_DESTINATION_ADDRESS=TEST_VALID_DESTINATION)
+    signed_blob, tx_hash = build_signed_payment_blob(
+        destination=TEST_VALID_DESTINATION,
+        amount={
+            "currency": USDC_HEX,
+            "issuer": USDC_TESTNET_ISSUER,
+            "value": "4.5",
+        },
+    )
+    set_client_responses(
+        service,
+        monkeypatch,
+        {"engine_result": "tesSUCCESS"},
+        {
+            "validated": True,
+            "meta": {
+                "delivered_amount": {
+                    "currency": USDC_HEX,
+                    "issuer": USDC_TESTNET_ISSUER,
+                    "value": "4.5",
                 }
             },
         },

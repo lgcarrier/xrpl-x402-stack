@@ -14,7 +14,13 @@ from xrpl.transaction import sign
 from xrpl.wallet import Wallet
 
 import app.factory as factory_module
-from app.assets import RLUSD_HEX, RLUSD_TESTNET_ISSUER, TF_PARTIAL_PAYMENT
+from app.assets import (
+    RLUSD_HEX,
+    RLUSD_TESTNET_ISSUER,
+    TF_PARTIAL_PAYMENT,
+    USDC_HEX,
+    USDC_TESTNET_ISSUER,
+)
 from app.config import Settings
 from app.factory import create_app
 from app.gateway_auth import RedisGatewayAuthenticator, hash_gateway_token
@@ -253,6 +259,7 @@ def test_supported_reports_structured_assets() -> None:
         "assets": [
             {"code": "XRP", "issuer": None},
             {"code": "RLUSD", "issuer": RLUSD_TESTNET_ISSUER},
+            {"code": "USDC", "issuer": USDC_TESTNET_ISSUER},
         ],
         "settlement_mode": "validated",
     }
@@ -695,6 +702,30 @@ def test_verify_returns_issuer_aware_asset_metadata() -> None:
         "invoice_id": hashlib.sha256(signed_blob.encode("utf-8")).hexdigest()[:32],
         "amount": "1.25 RLUSD",
         "asset": {"code": "RLUSD", "issuer": RLUSD_TESTNET_ISSUER},
+        "destination": TEST_VALID_DESTINATION,
+        "message": "Payment valid",
+    }
+
+
+def test_verify_returns_builtin_usdc_asset_metadata() -> None:
+    service = build_service(MY_DESTINATION_ADDRESS=TEST_VALID_DESTINATION)
+    signed_blob, _tx_hash = build_signed_payment_blob(
+        destination=TEST_VALID_DESTINATION,
+        amount={
+            "currency": USDC_HEX,
+            "issuer": USDC_TESTNET_ISSUER,
+            "value": "2.5",
+        },
+    )
+    client = build_client(service, MY_DESTINATION_ADDRESS=TEST_VALID_DESTINATION)
+    response = client.post("/verify", json={"signed_tx_blob": signed_blob})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "valid": True,
+        "invoice_id": hashlib.sha256(signed_blob.encode("utf-8")).hexdigest()[:32],
+        "amount": "2.5 USDC",
+        "asset": {"code": "USDC", "issuer": USDC_TESTNET_ISSUER},
         "destination": TEST_VALID_DESTINATION,
         "message": "Payment valid",
     }
