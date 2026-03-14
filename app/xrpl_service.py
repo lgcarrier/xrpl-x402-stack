@@ -23,7 +23,7 @@ from app.assets import (
     supported_asset_keys,
 )
 from app.config import Settings, get_settings
-from app.models import AssetDescriptor, SettleResponse, VerifyResponse
+from app.models import AssetDescriptor, SettleResponse, StructuredAmount, VerifyResponse
 from app.replay_store import ReplayReservation, ReplayStore, build_replay_store
 
 logger = structlog.get_logger()
@@ -233,6 +233,15 @@ class XRPLService:
     def _to_asset_descriptor(asset: AssetKey) -> AssetDescriptor:
         return AssetDescriptor(code=asset.code, issuer=asset.issuer)
 
+    @classmethod
+    def _to_structured_amount(cls, amount: NormalizedAmount) -> StructuredAmount:
+        return StructuredAmount(
+            value=str(amount.drops if amount.drops is not None else amount.value),
+            unit="drops" if amount.drops is not None else "issued",
+            asset=cls._to_asset_descriptor(amount.asset),
+            drops=amount.drops,
+        )
+
     def supported_assets(self) -> list[AssetDescriptor]:
         return [self._to_asset_descriptor(asset) for asset in self._supported_assets]
 
@@ -387,6 +396,8 @@ class XRPLService:
                 invoice_id=validated_payment.invoice_id,
                 amount=format_amount(validated_payment.amount),
                 asset=self._to_asset_descriptor(validated_payment.amount.asset),
+                amount_details=self._to_structured_amount(validated_payment.amount),
+                payer=validated_payment.tx.account,
                 destination=validated_payment.tx.destination,
             )
         except Exception as exc:

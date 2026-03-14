@@ -28,6 +28,7 @@ DEFAULT_BEARER_TOKEN = "test-facilitator-token"
 class FakePayment:
     destination: str
     amount: object
+    account: str = TEST_VALID_DESTINATION
     invoice_id: str | None = "INVOICE-123"
     flags: int = 0
     last_ledger_sequence: int | None = None
@@ -171,6 +172,13 @@ def test_verify_normalizes_rlusd_hex_currency_code() -> None:
         "issuer": RLUSD_TESTNET_ISSUER,
     }
     assert response.amount == "1.5 RLUSD"
+    assert response.amount_details.model_dump() == {
+        "value": "1.5",
+        "unit": "issued",
+        "asset": {"code": "RLUSD", "issuer": RLUSD_TESTNET_ISSUER},
+        "drops": None,
+    }
+    assert response.payer == binarycodec.decode(signed_blob)["Account"]
     assert response.invoice_id == hashlib.sha256(signed_blob.encode("utf-8")).hexdigest()[:32]
 
 
@@ -192,6 +200,13 @@ def test_verify_normalizes_usdc_hex_currency_code() -> None:
         "issuer": USDC_TESTNET_ISSUER,
     }
     assert response.amount == "2.25 USDC"
+    assert response.amount_details.model_dump() == {
+        "value": "2.25",
+        "unit": "issued",
+        "asset": {"code": "USDC", "issuer": USDC_TESTNET_ISSUER},
+        "drops": None,
+    }
+    assert response.payer == binarycodec.decode(signed_blob)["Account"]
     assert response.invoice_id == hashlib.sha256(signed_blob.encode("utf-8")).hexdigest()[:32]
 
 

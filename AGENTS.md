@@ -18,14 +18,16 @@
 - Create virtualenv: `python3.12 -m venv .venv`
 - Activate virtualenv: `source .venv/bin/activate`
 - Install runtime dependencies: `pip install -r requirements.txt`
-- Install dev/test dependencies: `pip install -r requirements-dev.txt`
+- Install dev/test dependencies: `pip install -r requirements-dev.txt && pip install -e .`
 
 ## Common Commands
 
 - Run local API: `uvicorn app.main:app --reload`
 - Run tests: `pytest`
 - Run live XRPL Testnet integration test: `RUN_XRPL_TESTNET_LIVE=1 pytest -m live tests/integration/test_live_testnet.py -s`
-- Compile-check source: `PYTHONPYCACHEPREFIX=/tmp/pycache python -m compileall app tests`
+- Compile-check source: `PYTHONPYCACHEPREFIX=/tmp/pycache python -m compileall app src tests`
+- Build package artifacts: `python -m build`
+- Verify package metadata: `twine check dist/*`
 - Build Docker image: `docker build -t xrpl-x402-facilitator .`
 - Run Docker Compose stack: `docker compose up --build`
 
@@ -54,7 +56,9 @@
 - Environment variables are documented in `.env.example`.
 - The local default test suite intentionally skips the live XRPL Testnet test unless `RUN_XRPL_TESTNET_LIVE=1`.
 - No dedicated linter or formatter is configured yet; do not invent one in routine changes.
-- CI is defined in `.github/workflows/ci.yml` and runs `pytest` plus a Docker build smoke test.
+- CI is defined in `.github/workflows/ci.yml` and runs package build checks,
+  `pytest`, plus a Docker build smoke test.
+- The PyPI package is named `xrpl-x402-middleware` and imported as `xrpl_x402_middleware`.
 
 ## Pull Request Expectations
 

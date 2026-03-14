@@ -16,11 +16,20 @@ class PaymentRequest(BaseModel):
     invoice_id: str | None = Field(default=None, max_length=INVOICE_ID_MAX_LENGTH)
 
 
+class StructuredAmount(BaseModel):
+    value: str
+    unit: Literal["drops", "issued"]
+    asset: AssetDescriptor
+    drops: int | None = None
+
+
 class VerifyResponse(BaseModel):
     valid: bool
     invoice_id: str
     amount: str
     asset: AssetDescriptor
+    amount_details: StructuredAmount
+    payer: str
     destination: str
     message: str = "Payment valid"
 

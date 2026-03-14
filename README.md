@@ -32,6 +32,7 @@ stateless.
 - [API Reference](#api-reference)
 - [End-To-End Examples](#end-to-end-examples)
 - [Integration Patterns](#integration-patterns)
+- [Python Middleware Package](#python-middleware-package)
 - [Operational Guidance](#operational-guidance)
 - [Testing](#testing)
 - [Docker](#docker)
@@ -430,6 +431,7 @@ docker run --rm --name xrpl-facilitator-redis -p 6379:6379 redis:7-alpine
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+pip install -e .
 uvicorn app.main:app --reload
 ```
 
@@ -501,6 +503,13 @@ Example success response:
   "invoice_id": "ABC123...",
   "amount": "2 XRP",
   "asset": {"code": "XRP", "issuer": null},
+  "amount_details": {
+    "value": "2000000",
+    "unit": "drops",
+    "asset": {"code": "XRP", "issuer": null},
+    "drops": 2000000
+  },
+  "payer": "rPayerAddress...",
   "destination": "rYourAddress...",
   "message": "Payment valid"
 }
@@ -615,6 +624,13 @@ Example response:
   "invoice_id": "4EF84056B345DB96F7C1AB7568C364006BC37FE6F874231C1F96E63C1083C47D",
   "amount": "2 XRP",
   "asset": {"code": "XRP", "issuer": null},
+  "amount_details": {
+    "value": "2000000",
+    "unit": "drops",
+    "asset": {"code": "XRP", "issuer": null},
+    "drops": 2000000
+  },
+  "payer": "rPayerAddress...",
   "destination": "rYourAddress...",
   "message": "Payment valid"
 }
@@ -704,6 +720,73 @@ Typical policy choices:
 - allow `optimistic` settlement only for low-risk low-value calls
 - reject partial payments at the gateway as a second line of defense
 
+## Python Middleware Package
+
+This repository now also ships a Python package for seller-side x402 route
+protection on XRPL.
+
+Published package name:
+
+```bash
+pip install xrpl-x402-middleware
+```
+
+Local editable install from this repository:
+
+```bash
+pip install -e .
+```
+
+Supported CAIP-2 network identifiers:
+
+- `xrpl:0` for XRPL mainnet
+- `xrpl:1` for XRPL testnet
+
+Minimal FastAPI example:
+
+```python
+from fastapi import FastAPI
+
+from xrpl_x402_middleware import PaymentMiddlewareASGI, require_payment
+
+app = FastAPI()
+app.add_middleware(
+    PaymentMiddlewareASGI,
+    route_configs={
+        "POST /premium": require_payment(
+            facilitator_url="http://127.0.0.1:8000",
+            bearer_token="replace-with-your-facilitator-token",
+            pay_to="rYourXRPLReceivingAddressHere1234567890...",
+            network="xrpl:1",
+            xrp_drops=1000,
+            description="One premium API call",
+        )
+    },
+)
+```
+
+Unpaid requests receive a `402` plus a Base64-encoded `PAYMENT-REQUIRED`
+header. Paid retries send a Base64-encoded `PAYMENT-SIGNATURE` header whose
+decoded JSON payload looks like:
+
+```json
+{
+  "x402Version": 2,
+  "scheme": "exact",
+  "network": "xrpl:1",
+  "payload": {
+    "signedTxBlob": "120000...",
+    "invoiceId": "optional-signed-invoice-id"
+  }
+}
+```
+
+After a successful verify-and-settle flow, the middleware stores the settled
+payment context on `request.state.x402_payment` and adds a Base64-encoded
+`PAYMENT-RESPONSE` header to the downstream response.
+
+The Python import package is `xrpl_x402_middleware`.
+
 ## Operational Guidance
 
 For early deployments:
@@ -737,6 +820,8 @@ Install test dependencies:
 
 ```bash
 pip install -r requirements-dev.txt
+pip install -e .
+PYTHONPYCACHEPREFIX=/tmp/pycache python -m compileall app src tests
 ```
 
 Run the default test suite:

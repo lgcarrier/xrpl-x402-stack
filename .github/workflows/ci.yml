@@ -27,9 +27,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
+          pip install -e .
+
+      - name: Build package artifacts
+        run: python -m build
+
+      - name: Validate package metadata
+        run: twine check dist/*
 
       - name: Compile source files
-        run: PYTHONPYCACHEPREFIX=/tmp/pycache python -m compileall app tests
+        run: PYTHONPYCACHEPREFIX=/tmp/pycache python -m compileall app src tests
 
       - name: Run pytest
         run: PYTHONPYCACHEPREFIX=/tmp/pycache pytest -q

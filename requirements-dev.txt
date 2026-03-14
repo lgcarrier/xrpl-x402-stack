@@ -1,2 +1,5 @@
 -r requirements.txt
+build>=1.2,<2
+hatchling>=1.27
 pytest==8.3.3
+twine>=5,<7

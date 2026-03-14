@@ -28,6 +28,7 @@ from app.models import (
     INVOICE_ID_MAX_LENGTH,
     SIGNED_TX_BLOB_MAX_LENGTH,
     AssetDescriptor,
+    StructuredAmount,
     VerifyResponse,
 )
 from app.xrpl_service import XRPLService
@@ -45,6 +46,7 @@ REDIS_GATEWAY_TOKEN = "test-redis-gateway-token"
 class FakePayment:
     destination: str
     amount: object
+    account: str = TEST_ACCOUNT
     invoice_id: str | None = "INVOICE-123"
     flags: int = 0
     last_ledger_sequence: int | None = None
@@ -484,6 +486,13 @@ def test_verify_rate_limit_is_scoped_to_gateway_id(
             invoice_id="INVOICE-123",
             amount="2 XRP",
             asset=AssetDescriptor(code="XRP", issuer=None),
+            amount_details=StructuredAmount(
+                value="2000000",
+                unit="drops",
+                asset=AssetDescriptor(code="XRP", issuer=None),
+                drops=2000000,
+            ),
+            payer=TEST_ACCOUNT,
             destination=TEST_DESTINATION,
         )
 
@@ -697,11 +706,19 @@ def test_verify_returns_issuer_aware_asset_metadata() -> None:
     response = client.post("/verify", json={"signed_tx_blob": signed_blob})
 
     assert response.status_code == 200
+    payer = binarycodec.decode(signed_blob)["Account"]
     assert response.json() == {
         "valid": True,
         "invoice_id": hashlib.sha256(signed_blob.encode("utf-8")).hexdigest()[:32],
         "amount": "1.25 RLUSD",
         "asset": {"code": "RLUSD", "issuer": RLUSD_TESTNET_ISSUER},
+        "amount_details": {
+            "value": "1.25",
+            "unit": "issued",
+            "asset": {"code": "RLUSD", "issuer": RLUSD_TESTNET_ISSUER},
+            "drops": None,
+        },
+        "payer": payer,
         "destination": TEST_VALID_DESTINATION,
         "message": "Payment valid",
     }
@@ -721,11 +738,19 @@ def test_verify_returns_builtin_usdc_asset_metadata() -> None:
     response = client.post("/verify", json={"signed_tx_blob": signed_blob})
 
     assert response.status_code == 200
+    payer = binarycodec.decode(signed_blob)["Account"]
     assert response.json() == {
         "valid": True,
         "invoice_id": hashlib.sha256(signed_blob.encode("utf-8")).hexdigest()[:32],
         "amount": "2.5 USDC",
         "asset": {"code": "USDC", "issuer": USDC_TESTNET_ISSUER},
+        "amount_details": {
+            "value": "2.5",
+            "unit": "issued",
+            "asset": {"code": "USDC", "issuer": USDC_TESTNET_ISSUER},
+            "drops": None,
+        },
+        "payer": payer,
         "destination": TEST_VALID_DESTINATION,
         "message": "Payment valid",
     }
