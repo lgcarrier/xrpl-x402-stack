@@ -22,6 +22,13 @@ Create each project on both PyPI and TestPyPI, then add a trusted publisher with
 
 Each package needs its own environment because PyPI/TestPyPI treat the GitHub OIDC identity as the combination of repository, workflow, and environment.
 
+PyPI and TestPyPI currently allow only three pending trusted publishers at once. For the first release wave:
+
+1. Register pending publishers for `core`, `facilitator`, and `middleware`.
+2. Publish `core` on the target index.
+3. Add the `client` pending publisher on that index.
+4. Continue with `facilitator`, `middleware`, and `client`.
+
 GitHub environments used by the workflow:
 
 - `testpypi-core`
