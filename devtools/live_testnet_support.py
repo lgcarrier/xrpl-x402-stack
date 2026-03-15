@@ -17,7 +17,7 @@ from xrpl.models.transactions import AccountDelete, Payment, TrustSet
 from xrpl.transaction import submit_and_wait
 from xrpl.wallet import Wallet, generate_faucet_wallet
 
-from app.assets import (
+from xrpl_x402_core import (
     RLUSD_CODE,
     RLUSD_HEX,
     USDC_CODE,

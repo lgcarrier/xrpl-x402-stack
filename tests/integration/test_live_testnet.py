@@ -13,11 +13,11 @@ from xrpl.models.transactions import Payment
 from xrpl.transaction import autofill, sign
 from xrpl.wallet import Wallet
 
-import app.factory as factory_module
-from app.assets import RLUSD_HEX, USDC_HEX, USDC_TESTNET_ISSUER, normalize_currency_code
-from app.config import Settings
-from app.factory import create_app
-from app.xrpl_service import XRPLService
+import xrpl_x402_facilitator.factory as factory_module
+from xrpl_x402_core import RLUSD_HEX, USDC_HEX, USDC_TESTNET_ISSUER, normalize_currency_code
+from xrpl_x402_facilitator.config import Settings
+from xrpl_x402_facilitator.factory import create_app
+from xrpl_x402_facilitator.xrpl_service import XRPLService
 from devtools.live_testnet_support import (
     DEFAULT_RLUSD_TESTNET_ISSUER,
     DEFAULT_USDC_TESTNET_ISSUER,

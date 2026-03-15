@@ -13,25 +13,21 @@ from xrpl.models.transactions import Payment
 from xrpl.transaction import sign
 from xrpl.wallet import Wallet
 
-import app.factory as factory_module
-from app.assets import (
+import xrpl_x402_facilitator.factory as factory_module
+from xrpl_x402_core import (
+    INVOICE_ID_MAX_LENGTH,
     RLUSD_HEX,
     RLUSD_TESTNET_ISSUER,
+    SIGNED_TX_BLOB_MAX_LENGTH,
     TF_PARTIAL_PAYMENT,
     USDC_HEX,
     USDC_TESTNET_ISSUER,
 )
-from app.config import Settings
-from app.factory import create_app
-from app.gateway_auth import RedisGatewayAuthenticator, hash_gateway_token
-from app.models import (
-    INVOICE_ID_MAX_LENGTH,
-    SIGNED_TX_BLOB_MAX_LENGTH,
-    AssetDescriptor,
-    StructuredAmount,
-    VerifyResponse,
-)
-from app.xrpl_service import XRPLService
+from xrpl_x402_facilitator.config import Settings
+from xrpl_x402_facilitator.factory import create_app
+from xrpl_x402_facilitator.gateway_auth import RedisGatewayAuthenticator, hash_gateway_token
+from xrpl_x402_facilitator.models import AssetDescriptor, StructuredAmount, VerifyResponse
+from xrpl_x402_facilitator.xrpl_service import XRPLService
 from tests.fakes import FakeRedis
 
 TEST_DESTINATION = "rTESTDESTINATIONADDRESS123456789"

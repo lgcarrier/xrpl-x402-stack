@@ -1,0 +1,44 @@
+[build-system]
+requires = ["editables>=0.5", "hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "xrpl-x402-facilitator"
+version = "0.1.0"
+description = "FastAPI facilitator service for XRPL-backed x402 payments"
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.12"
+license = "MIT"
+authors = [
+  { name = "Louis-Guillaume Carrier-Bedard", email = "lgcarrier@gmail.com" },
+]
+keywords = ["xrpl", "x402", "facilitator", "fastapi", "payments"]
+dependencies = [
+  "fastapi==0.115.0",
+  "pydantic-settings==2.6.1",
+  "python-dotenv==1.0.1",
+  "redis==5.2.1",
+  "slowapi==0.1.9",
+  "structlog==24.4.0",
+  "uvicorn[standard]==0.30.6",
+  "xrpl-py==4.0.0",
+  "xrpl-x402-core>=0.1.0,<0.2.0",
+]
+
+[project.scripts]
+xrpl-x402-facilitator = "xrpl_x402_facilitator.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/lgcarrier/xrpl-x402-facilitator"
+Documentation = "https://github.com/lgcarrier/xrpl-x402-facilitator"
+Repository = "https://github.com/lgcarrier/xrpl-x402-facilitator"
+Issues = "https://github.com/lgcarrier/xrpl-x402-facilitator/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/xrpl_x402_facilitator"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src/xrpl_x402_facilitator",
+  "/README.md",
+]

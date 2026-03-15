@@ -1,4 +1,4 @@
-from app.assets import (
+from xrpl_x402_core import (
     RLUSD_MAINNET_ISSUER,
     RLUSD_TESTNET_ISSUER,
     USDC_MAINNET_ISSUER,

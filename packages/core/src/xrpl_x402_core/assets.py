@@ -44,7 +44,7 @@ class NormalizedAmount:
 def normalize_currency_code(currency: str) -> str:
     normalized = str(currency).strip().upper()
     if not normalized:
-        raise ValueError("Issued asset currency missing")
+        raise ValueError("Asset code is required")
 
     if len(normalized) == 40 and set(normalized) <= _HEX_DIGITS:
         decoded = bytes.fromhex(normalized)
@@ -68,9 +68,7 @@ def parse_allowed_issued_assets(raw_assets: str) -> list[AssetKey]:
         normalized_code = normalize_currency_code(code)
         normalized_issuer = issuer.strip()
         if not separator or not normalized_issuer:
-            raise ValueError(
-                "ALLOWED_ISSUED_ASSETS entries must use CODE:ISSUER format"
-            )
+            raise ValueError("ALLOWED_ISSUED_ASSETS entries must use CODE:ISSUER format")
         if normalized_code == XRP_CODE:
             raise ValueError("ALLOWED_ISSUED_ASSETS cannot include XRP")
 
@@ -104,6 +102,27 @@ def supported_asset_keys(network_id: str, raw_assets: str) -> list[AssetKey]:
             seen_assets.add(asset)
 
     return supported_assets
+
+
+def asset_identifier_from_parts(code: str, issuer: str | None = None) -> str:
+    normalized_code = normalize_currency_code(code)
+    if issuer is None:
+        return f"{normalized_code}:native"
+    return f"{normalized_code}:{issuer.strip()}"
+
+
+def parse_asset_identifier(identifier: str) -> AssetKey:
+    code, separator, issuer = identifier.partition(":")
+    normalized_code = normalize_currency_code(code)
+    if not separator:
+        raise ValueError("Asset identifier must use CODE:ISSUER or CODE:native")
+
+    normalized_issuer = issuer.strip()
+    if normalized_issuer == "native":
+        return AssetKey(code=normalized_code, issuer=None)
+    if not normalized_issuer:
+        raise ValueError("Asset identifier issuer is required")
+    return AssetKey(code=normalized_code, issuer=normalized_issuer)
 
 
 def format_decimal(value: Decimal) -> str:

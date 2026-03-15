@@ -5,8 +5,8 @@ import hashlib
 import secrets
 from typing import Any, Protocol
 
-from app.config import Settings
-from app.redis_utils import create_async_redis_client
+from xrpl_x402_facilitator.config import Settings
+from xrpl_x402_facilitator.redis_utils import create_async_redis_client
 
 DEFAULT_SINGLE_GATEWAY_ID = "default-gateway"
 ACTIVE_GATEWAY_STATUS = "active"

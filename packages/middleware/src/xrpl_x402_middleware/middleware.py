@@ -7,6 +7,7 @@ from starlette.datastructures import Headers, MutableHeaders
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from xrpl_x402_core import PaymentPayload, PaymentRequired, PaymentResponse, XRPLAmount, XRPLAsset, XRPLPaymentOption
 from xrpl_x402_middleware.client import (
     FacilitatorSettleResponse,
     FacilitatorSupported,
@@ -20,15 +21,7 @@ from xrpl_x402_middleware.exceptions import (
     InvalidPaymentHeaderError,
     RouteConfigurationError,
 )
-from xrpl_x402_middleware.types import (
-    PaymentPayload,
-    PaymentRequired,
-    PaymentResponse,
-    RouteConfig,
-    XRPLAmount,
-    XRPLAsset,
-    XRPLPaymentOption,
-)
+from xrpl_x402_middleware.types import RouteConfig
 from xrpl_x402_middleware.utils import (
     canonical_asset_identifier,
     decode_model_from_base64,

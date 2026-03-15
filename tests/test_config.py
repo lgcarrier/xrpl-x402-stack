@@ -1,6 +1,6 @@
 import pytest
 
-from app.config import Settings
+from xrpl_x402_facilitator.config import Settings
 
 
 def build_settings(**overrides: object) -> Settings:

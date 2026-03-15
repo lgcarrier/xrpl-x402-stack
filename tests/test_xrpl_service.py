@@ -12,11 +12,11 @@ from xrpl.models.transactions import Payment
 from xrpl.transaction import sign
 from xrpl.wallet import Wallet
 
-from app.assets import RLUSD_HEX, RLUSD_TESTNET_ISSUER, USDC_HEX, USDC_TESTNET_ISSUER
-from app.config import Settings
-from app.models import SettleResponse
-from app.replay_store import RedisReplayStore
-from app.xrpl_service import XRPLService
+from xrpl_x402_core import RLUSD_HEX, RLUSD_TESTNET_ISSUER, USDC_HEX, USDC_TESTNET_ISSUER
+from xrpl_x402_facilitator.config import Settings
+from xrpl_x402_facilitator.models import SettleResponse
+from xrpl_x402_facilitator.replay_store import RedisReplayStore
+from xrpl_x402_facilitator.xrpl_service import XRPLService
 from tests.fakes import FakeRedis
 
 TEST_DESTINATION = "rTESTDESTINATIONADDRESS123456789"

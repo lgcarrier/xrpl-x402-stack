@@ -13,7 +13,7 @@ from xrpl.core.keypairs import derive_classic_address, is_valid_message
 from xrpl.models.requests import Ledger, SubmitOnly, Tx
 from xrpl.models.transactions import Payment
 
-from app.assets import (
+from xrpl_x402_core import (
     TF_PARTIAL_PAYMENT,
     AssetKey,
     NormalizedAmount,
@@ -22,9 +22,9 @@ from app.assets import (
     normalize_currency_code,
     supported_asset_keys,
 )
-from app.config import Settings, get_settings
-from app.models import AssetDescriptor, SettleResponse, StructuredAmount, VerifyResponse
-from app.replay_store import ReplayReservation, ReplayStore, build_replay_store
+from xrpl_x402_facilitator.config import Settings, get_settings
+from xrpl_x402_facilitator.models import AssetDescriptor, SettleResponse, StructuredAmount, VerifyResponse
+from xrpl_x402_facilitator.replay_store import ReplayReservation, ReplayStore, build_replay_store
 
 logger = structlog.get_logger()
 

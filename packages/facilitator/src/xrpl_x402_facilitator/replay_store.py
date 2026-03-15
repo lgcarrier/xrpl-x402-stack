@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import uuid4
 
-from app.config import Settings
-from app.redis_utils import create_async_redis_client
+from xrpl_x402_facilitator.config import Settings
+from xrpl_x402_facilitator.redis_utils import create_async_redis_client
 
 REPLAY_PENDING = "pending"
 REPLAY_PROCESSED = "processed"

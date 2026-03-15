@@ -1,0 +1,33 @@
+[build-system]
+requires = ["editables>=0.5", "hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "xrpl-x402-core"
+version = "0.1.0"
+description = "Shared XRPL x402 wire models and helpers"
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.12"
+license = "MIT"
+authors = [
+  { name = "Louis-Guillaume Carrier-Bedard", email = "lgcarrier@gmail.com" },
+]
+keywords = ["xrpl", "x402", "xrp", "payments"]
+dependencies = [
+  "pydantic>=2,<3",
+]
+
+[project.urls]
+Homepage = "https://github.com/lgcarrier/xrpl-x402-facilitator"
+Documentation = "https://github.com/lgcarrier/xrpl-x402-facilitator"
+Repository = "https://github.com/lgcarrier/xrpl-x402-facilitator"
+Issues = "https://github.com/lgcarrier/xrpl-x402-facilitator/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/xrpl_x402_core"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src/xrpl_x402_core",
+  "/README.md",
+]

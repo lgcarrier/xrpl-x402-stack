@@ -12,16 +12,16 @@ from slowapi.util import get_remote_address
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.config import Settings, get_settings
-from app.gateway_auth import (
+from xrpl_x402_facilitator.config import Settings, get_settings
+from xrpl_x402_facilitator.gateway_auth import (
     AuthenticatedGateway,
     GatewayAuthenticationError,
     GatewayAuthenticator,
     build_gateway_authenticator,
 )
-from app.models import PaymentRequest, SettleResponse, SupportedResponse, VerifyResponse
-from app.redis_utils import create_async_redis_client
-from app.xrpl_service import XRPLService
+from xrpl_x402_facilitator.models import PaymentRequest, SettleResponse, SupportedResponse, VerifyResponse
+from xrpl_x402_facilitator.redis_utils import create_async_redis_client
+from xrpl_x402_facilitator.xrpl_service import XRPLService
 
 PAYMENT_ENDPOINT_PATHS: Final[frozenset[str]] = frozenset({"/verify", "/settle"})
 AUTHENTICATION_ERROR_DETAIL: Final[str] = "Invalid authentication credentials"

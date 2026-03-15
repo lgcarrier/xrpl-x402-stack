@@ -4,11 +4,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from xrpl_x402_middleware.utils import (
-    build_xrpl_extra,
-    is_valid_xrpl_network,
-    normalize_currency_code,
-)
+from xrpl_x402_core.assets import normalize_currency_code
+from xrpl_x402_core.helpers import build_xrpl_extra, is_valid_xrpl_network
+
+SIGNED_TX_BLOB_MAX_LENGTH = 16_384
+INVOICE_ID_MAX_LENGTH = 128
 
 
 class StrictModel(BaseModel):
@@ -100,28 +100,6 @@ class XRPLPaymentOption(WireModel):
         return self
 
 
-class RouteConfig(StrictModel):
-    facilitator_url: str = Field(alias="facilitatorUrl")
-    bearer_token: str = Field(alias="bearerToken", repr=False)
-    accepts: list[XRPLPaymentOption]
-    description: str | None = None
-    mime_type: str = Field(default="application/json", alias="mimeType")
-
-    @field_validator("facilitator_url", "bearer_token")
-    @classmethod
-    def _validate_required_strings(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("Value is required")
-        return normalized
-
-    @model_validator(mode="after")
-    def _validate_accepts(self) -> "RouteConfig":
-        if not self.accepts:
-            raise ValueError("At least one payment option is required")
-        return self
-
-
 class XRPLPaymentPayload(WireModel):
     signed_tx_blob: str = Field(alias="signedTxBlob")
     invoice_id: str | None = Field(default=None, alias="invoiceId")
@@ -168,3 +146,38 @@ class PaymentResponse(WireModel):
         if not is_valid_xrpl_network(normalized):
             raise ValueError("network must be a CAIP-2 xrpl:<reference> identifier")
         return normalized
+
+
+class PaymentRequest(StrictModel):
+    signed_tx_blob: str | None = Field(default=None, max_length=SIGNED_TX_BLOB_MAX_LENGTH)
+    invoice_id: str | None = Field(default=None, max_length=INVOICE_ID_MAX_LENGTH)
+
+
+class StructuredAmount(StrictModel):
+    value: str
+    unit: Literal["drops", "issued"]
+    asset: XRPLAsset
+    drops: int | None = None
+
+
+class FacilitatorVerifyResponse(StrictModel):
+    valid: bool
+    invoice_id: str
+    amount: str
+    asset: XRPLAsset
+    amount_details: StructuredAmount
+    payer: str
+    destination: str
+    message: str = "Payment valid"
+
+
+class FacilitatorSettleResponse(StrictModel):
+    settled: bool
+    tx_hash: str
+    status: Literal["submitted", "validated"]
+
+
+class FacilitatorSupportedResponse(StrictModel):
+    network: str
+    assets: list[XRPLAsset]
+    settlement_mode: Literal["optimistic", "validated"]

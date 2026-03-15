@@ -5,12 +5,19 @@ from typing import Literal
 import httpx
 from pydantic import BaseModel
 
+from xrpl_x402_core import (
+    FacilitatorSettleResponse as CoreFacilitatorSettleResponse,
+    FacilitatorSupportedResponse as CoreFacilitatorSupportedResponse,
+    FacilitatorVerifyResponse as CoreFacilitatorVerifyResponse,
+    XRPLAmount,
+    XRPLAsset,
+    amount_from_structured_amount,
+)
 from xrpl_x402_middleware.exceptions import (
     FacilitatorPaymentError,
     FacilitatorProtocolError,
     FacilitatorTransportError,
 )
-from xrpl_x402_middleware.types import XRPLAmount, XRPLAsset
 
 
 class FacilitatorSupported(BaseModel):
@@ -64,7 +71,12 @@ class XRPLFacilitatorClient:
             return self._supported_cache
 
         response = await self._request("GET", "/supported")
-        self._supported_cache = FacilitatorSupported.model_validate(response)
+        supported = CoreFacilitatorSupportedResponse.model_validate(response)
+        self._supported_cache = FacilitatorSupported(
+            network=supported.network,
+            assets=supported.assets,
+            settlement_mode=supported.settlement_mode,
+        )
         return self._supported_cache
 
     async def verify_payment(
@@ -83,15 +95,17 @@ class XRPLFacilitatorClient:
             authenticated=True,
             stage="verify",
         )
-        amount_details = response.get("amount_details")
-        if isinstance(amount_details, dict) and "asset" in amount_details:
-            response = dict(response)
-            response["amount_details"] = {
-                key: value
-                for key, value in amount_details.items()
-                if key != "asset"
-            }
-        return FacilitatorVerifyResponse.model_validate(response)
+        verify_response = CoreFacilitatorVerifyResponse.model_validate(response)
+        return FacilitatorVerifyResponse(
+            valid=verify_response.valid,
+            invoice_id=verify_response.invoice_id,
+            amount=verify_response.amount,
+            asset=verify_response.asset,
+            amount_details=amount_from_structured_amount(verify_response.amount_details),
+            payer=verify_response.payer,
+            destination=verify_response.destination,
+            message=verify_response.message,
+        )
 
     async def settle_payment(
         self,
@@ -109,7 +123,12 @@ class XRPLFacilitatorClient:
             authenticated=True,
             stage="settle",
         )
-        return FacilitatorSettleResponse.model_validate(response)
+        settle_response = CoreFacilitatorSettleResponse.model_validate(response)
+        return FacilitatorSettleResponse(
+            settled=settle_response.settled,
+            tx_hash=settle_response.tx_hash,
+            status=settle_response.status,
+        )
 
     async def _request(
         self,
