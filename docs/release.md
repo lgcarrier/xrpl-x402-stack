@@ -14,12 +14,24 @@ Create each project on both PyPI and TestPyPI, then add a trusted publisher with
 - Owner: `lgcarrier`
 - Repository: `xrpl-x402-stack`
 - Workflow: `.github/workflows/publish-package.yml`
-- Environment: `testpypi` for TestPyPI publishers, `pypi` for PyPI publishers
+- Environment:
+  - `testpypi-core` / `pypi-core` for `xrpl-x402-core`
+  - `testpypi-facilitator` / `pypi-facilitator` for `xrpl-x402-facilitator`
+  - `testpypi-middleware` / `pypi-middleware` for `xrpl-x402-middleware`
+  - `testpypi-client` / `pypi-client` for `xrpl-x402-client`
 
-GitHub environments already used by the workflow:
+Each package needs its own environment because PyPI/TestPyPI treat the GitHub OIDC identity as the combination of repository, workflow, and environment.
 
-- `testpypi`
-- `pypi`
+GitHub environments used by the workflow:
+
+- `testpypi-core`
+- `testpypi-facilitator`
+- `testpypi-middleware`
+- `testpypi-client`
+- `pypi-core`
+- `pypi-facilitator`
+- `pypi-middleware`
+- `pypi-client`
 
 ## Version Prep
 
