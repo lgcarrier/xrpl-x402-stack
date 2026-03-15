@@ -54,7 +54,7 @@ asyncio.run(fetch_paid_resource())
 ## Compatibility
 
 - Python `3.12`
-- `xrpl-py==4.0.0`
+- `xrpl-py==4.5.0`
 - Optional adapter extra pins `x402==2.3.0`
 - Examples target `xrpl:1`; mainnet usage uses `xrpl:0`
 

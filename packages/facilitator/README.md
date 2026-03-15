@@ -43,7 +43,7 @@ app = create_app()
 ## Compatibility
 
 - Python `3.12`
-- `xrpl-py==4.0.0`
+- `xrpl-py==4.5.0`
 - Default network is `xrpl:0`; local demos commonly target `xrpl:1`
 - `x402` is not required to run the facilitator service
 

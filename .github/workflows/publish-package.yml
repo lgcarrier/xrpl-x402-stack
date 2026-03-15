@@ -12,12 +12,14 @@ on:
           - facilitator
           - middleware
           - client
+          - payer
   push:
     tags:
       - "core-v*"
       - "facilitator-v*"
       - "middleware-v*"
       - "client-v*"
+      - "payer-v*"
 
 permissions:
   contents: read
@@ -78,6 +80,11 @@ jobs:
               echo "package_dir=packages/client" >> "$GITHUB_OUTPUT"
               echo "package_name=xrpl-x402-client" >> "$GITHUB_OUTPUT"
               echo "artifact_name=client-distributions" >> "$GITHUB_OUTPUT"
+              ;;
+            payer)
+              echo "package_dir=packages/payer" >> "$GITHUB_OUTPUT"
+              echo "package_name=xrpl-x402-payer" >> "$GITHUB_OUTPUT"
+              echo "artifact_name=payer-distributions" >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "Unsupported package target: $target" >&2
@@ -269,6 +276,14 @@ jobs:
                       python -c "from xrpl_x402_client import XRPLPaymentSigner; assert XRPLPaymentSigner"
                     fi
                     ;;
+                  payer)
+                    if [ "$requirement" = "${PACKAGE_NAME}[mcp]==${PACKAGE_VERSION}" ]; then
+                      python -c "import xrpl_x402_payer.mcp as module; assert callable(module.main)"
+                    else
+                      python -c "from xrpl_x402_payer import XRPLPayer; assert XRPLPayer"
+                      xrpl-x402 --help >/dev/null
+                    fi
+                    ;;
                 esac
                 deactivate
                 rm -rf "$venv_path"
@@ -289,6 +304,9 @@ jobs:
           case "$TARGET" in
             middleware|client)
               verify_install "${PACKAGE_NAME}[x402]==${PACKAGE_VERSION}" /tmp/testpypi-extra
+              ;;
+            payer)
+              verify_install "${PACKAGE_NAME}[mcp]==${PACKAGE_VERSION}" /tmp/testpypi-extra
               ;;
           esac
 
@@ -361,6 +379,14 @@ jobs:
                       python -c "from xrpl_x402_client import XRPLPaymentSigner; assert XRPLPaymentSigner"
                     fi
                     ;;
+                  payer)
+                    if [ "$requirement" = "${PACKAGE_NAME}[mcp]==${PACKAGE_VERSION}" ]; then
+                      python -c "import xrpl_x402_payer.mcp as module; assert callable(module.main)"
+                    else
+                      python -c "from xrpl_x402_payer import XRPLPayer; assert XRPLPayer"
+                      xrpl-x402 --help >/dev/null
+                    fi
+                    ;;
                 esac
                 deactivate
                 rm -rf "$venv_path"
@@ -381,5 +407,8 @@ jobs:
           case "$TARGET" in
             middleware|client)
               verify_install "${PACKAGE_NAME}[x402]==${PACKAGE_VERSION}" /tmp/pypi-extra
+              ;;
+            payer)
+              verify_install "${PACKAGE_NAME}[mcp]==${PACKAGE_VERSION}" /tmp/pypi-extra
               ;;
           esac

@@ -47,6 +47,18 @@ services:
       XRPL_NETWORK: ${XRPL_NETWORK:-xrpl:1}
       XRPL_WALLET_SEED: ${XRPL_WALLET_SEED:-}
       PAYMENT_ASSET: ${PAYMENT_ASSET:-XRP:native}
+  buyer-agent-mcp:
+    profiles: ["buyer-agent-mcp"]
+    build: .
+    depends_on:
+      merchant:
+        condition: service_started
+    command: ["xrpl-x402", "mcp"]
+    environment:
+      XRPL_RPC_URL: ${XRPL_RPC_URL:-https://s.altnet.rippletest.net:51234}
+      XRPL_NETWORK: ${XRPL_NETWORK:-xrpl:1}
+      XRPL_WALLET_SEED: ${XRPL_WALLET_SEED:-}
+      XRPL_X402_MAX_SPEND: ${XRPL_X402_MAX_SPEND:-0.01}
   redis:
     image: redis:7-alpine
     healthcheck:

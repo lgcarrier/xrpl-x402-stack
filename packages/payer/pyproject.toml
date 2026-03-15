@@ -3,16 +3,16 @@ requires = ["editables>=0.5", "hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "xrpl-x402-client"
+name = "xrpl-x402-payer"
 version = "0.1.0"
-description = "Buyer-side Python SDK for XRPL exact x402 payments"
+description = "CLI, proxy, and MCP payer for XRPL exact x402 payments"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.12"
 license = "MIT"
 authors = [
   { name = "Louis-Guillaume Carrier-Bedard", email = "lgcarrier@gmail.com" },
 ]
-keywords = ["xrpl", "x402", "client", "httpx", "payments"]
+keywords = ["xrpl", "x402", "payer", "mcp", "payments"]
 classifiers = [
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
@@ -25,22 +25,29 @@ classifiers = [
 dependencies = [
   "httpx==0.28.1",
   "pydantic>=2,<3",
+  "starlette>=0.37,<1",
+  "typer>=0.12,<1",
+  "uvicorn>=0.30.6,<1",
   "xrpl-py==4.5.0",
+  "xrpl-x402-client>=0.1.0,<0.2.0",
   "xrpl-x402-core>=0.1.0,<0.2.0",
 ]
 
 [project.optional-dependencies]
-x402 = ["x402==2.3.0"]
+mcp = ["fastmcp>=3.1.0"]
+
+[project.scripts]
+xrpl-x402 = "xrpl_x402_payer.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/lgcarrier/xrpl-x402-stack"
-Documentation = "https://lgcarrier.github.io/xrpl-x402-stack/packages/client/"
+Documentation = "https://lgcarrier.github.io/xrpl-x402-stack/packages/payer/"
 Repository = "https://github.com/lgcarrier/xrpl-x402-stack"
 Issues = "https://github.com/lgcarrier/xrpl-x402-stack/issues"
 Changelog = "https://github.com/lgcarrier/xrpl-x402-stack/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/xrpl_x402_client"]
+packages = ["src/xrpl_x402_payer"]
 
 [tool.hatch.build.hooks.custom]
 path = "build_hook.py"
@@ -50,7 +57,7 @@ path = "build_hook.py"
 
 [tool.hatch.build.targets.sdist]
 include = [
-  "/src/xrpl_x402_client",
+  "/src/xrpl_x402_payer",
   "/README.md",
   "/LICENSE",
   "/build_hook.py",

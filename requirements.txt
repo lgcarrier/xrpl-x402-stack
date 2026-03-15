@@ -2,3 +2,4 @@
 ./packages/facilitator
 ./packages/middleware
 ./packages/client
+./packages/payer

@@ -58,6 +58,24 @@ status=200
 {"message":"premium content unlocked", ...}
 ```
 
+## Full AI Agent Support
+
+Once the quickstart stack is running, you can use the payer package as a local agent bridge:
+
+```bash
+pip install "xrpl-x402-payer[mcp]"
+xrpl-x402 skill install
+xrpl-x402 mcp
+```
+
+Claude Desktop can register it directly:
+
+```bash
+claude mcp add xrpl-x402-payer -- xrpl-x402 mcp
+```
+
+That lets local agents call `pay_url` directly instead of shelling out to a buyer script.
+
 ## What Happened
 
 - the merchant challenged the first request with `402 Payment Required`

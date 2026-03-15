@@ -10,6 +10,7 @@ Hosted docs: <https://lgcarrier.github.io/xrpl-x402-stack/>
 - `xrpl-x402-facilitator`: FastAPI verifier/settler service
 - `xrpl-x402-middleware`: seller-side ASGI route protection
 - `xrpl-x402-client`: buyer-side payment signing and `402` retry support
+- `xrpl-x402-payer`: buyer CLI, proxy, receipts, and MCP server
 
 ## Fastest Real Demo
 
@@ -24,11 +25,25 @@ docker compose --env-file .env.quickstart run --rm --profile demo buyer
 
 That flow runs a real XRP payment on XRPL Testnet. The hosted docs also include follow-on RLUSD and USDC guides.
 
+## Full AI Agent Support
+
+```bash
+pip install "xrpl-x402-payer[mcp]"
+xrpl-x402 skill install
+xrpl-x402 mcp
+```
+
+Claude Desktop and Cursor can add the payer directly with:
+
+```bash
+claude mcp add xrpl-x402-payer -- xrpl-x402 mcp
+```
+
 ## Verification
 
 ```bash
 pytest -q
-for package in packages/core packages/facilitator packages/middleware packages/client; do
+for package in packages/core packages/facilitator packages/middleware packages/client packages/payer; do
   (
     cd "$package"
     python -m build --sdist

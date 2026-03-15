@@ -31,7 +31,7 @@ jobs:
 
       - name: Build package artifacts
         run: |
-          for package in packages/core packages/facilitator packages/middleware packages/client; do
+          for package in packages/core packages/facilitator packages/middleware packages/client packages/payer; do
             (
               cd "$package"
               python -m build --sdist
@@ -43,7 +43,7 @@ jobs:
         run: twine check packages/*/dist/*
 
       - name: Smoke import stack packages
-        run: python -c "import xrpl_x402_core, xrpl_x402_facilitator, xrpl_x402_middleware, xrpl_x402_client"
+        run: python -c "import xrpl_x402_core, xrpl_x402_facilitator, xrpl_x402_middleware, xrpl_x402_client, xrpl_x402_payer"
 
       - name: Compile source files
         run: PYTHONPYCACHEPREFIX=/tmp/pycache python -m compileall packages tests examples devtools
@@ -72,6 +72,7 @@ jobs:
           - facilitator
           - middleware
           - client
+          - payer
 
     steps:
       - name: Check out repository
@@ -102,6 +103,10 @@ jobs:
               echo "PACKAGE_DIR=packages/client" >> "$GITHUB_ENV"
               echo "PACKAGE_NAME=xrpl-x402-client" >> "$GITHUB_ENV"
               ;;
+            payer)
+              echo "PACKAGE_DIR=packages/payer" >> "$GITHUB_ENV"
+              echo "PACKAGE_NAME=xrpl-x402-payer" >> "$GITHUB_ENV"
+              ;;
             *)
               echo "Unsupported package target: ${{ matrix.target }}" >&2
               exit 1
@@ -120,6 +125,13 @@ jobs:
             python -m build --sdist
             python -m build --wheel
           )
+          if [ "$PACKAGE_DIR" = "packages/payer" ]; then
+            (
+              cd packages/client
+              python -m build --sdist
+              python -m build --wheel
+            )
+          fi
           if [ "$PACKAGE_DIR" != "packages/core" ]; then
             (
               cd "$PACKAGE_DIR"
@@ -155,7 +167,11 @@ jobs:
           python -m venv /tmp/wheel-venv
           . /tmp/wheel-venv/bin/activate
           python -m pip install --upgrade pip
-          python -m pip install --find-links "$PWD/packages/core/dist" "$WHEEL_PATH"
+          install_args=(install --find-links "$PWD/packages/core/dist")
+          if [ "${{ matrix.target }}" = "payer" ]; then
+            install_args+=(--find-links "$PWD/packages/client/dist")
+          fi
+          python -m pip "${install_args[@]}" "$WHEEL_PATH"
           case "${{ matrix.target }}" in
             core)
               python -c "import xrpl_x402_core as package; assert package.XRP_CODE == 'XRP'"
@@ -169,6 +185,10 @@ jobs:
               ;;
             client)
               python -c "from xrpl_x402_client import XRPLPaymentSigner; assert XRPLPaymentSigner"
+              ;;
+            payer)
+              python -c "from xrpl_x402_payer import XRPLPayer; assert XRPLPayer"
+              xrpl-x402 --help >/dev/null
               ;;
           esac
 
@@ -177,7 +197,11 @@ jobs:
           python -m venv /tmp/sdist-venv
           . /tmp/sdist-venv/bin/activate
           python -m pip install --upgrade pip
-          python -m pip install --find-links "$PWD/packages/core/dist" "$SDIST_PATH"
+          install_args=(install --find-links "$PWD/packages/core/dist")
+          if [ "${{ matrix.target }}" = "payer" ]; then
+            install_args+=(--find-links "$PWD/packages/client/dist")
+          fi
+          python -m pip "${install_args[@]}" "$SDIST_PATH"
           case "${{ matrix.target }}" in
             core)
               python -c "import xrpl_x402_core as package; assert package.XRP_CODE == 'XRP'"
@@ -192,20 +216,33 @@ jobs:
             client)
               python -c "from xrpl_x402_client import XRPLPaymentSigner; assert XRPLPaymentSigner"
               ;;
+            payer)
+              python -c "from xrpl_x402_payer import XRPLPayer; assert XRPLPayer"
+              xrpl-x402 --help >/dev/null
+              ;;
           esac
 
-      - name: Smoke optional x402 extras
-        if: matrix.target == 'middleware' || matrix.target == 'client'
+      - name: Smoke optional extras
+        if: matrix.target == 'middleware' || matrix.target == 'client' || matrix.target == 'payer'
         run: |
           python -m venv /tmp/extra-venv
           . /tmp/extra-venv/bin/activate
           python -m pip install --upgrade pip
-          python -m pip install --find-links "$PWD/packages/core/dist" "${PACKAGE_NAME}[x402] @ ${WHEEL_URI}"
+          extra_name=x402
+          install_args=(install --find-links "$PWD/packages/core/dist")
+          if [ "${{ matrix.target }}" = "payer" ]; then
+            extra_name=mcp
+            install_args+=(--find-links "$PWD/packages/client/dist")
+          fi
+          python -m pip "${install_args[@]}" "${PACKAGE_NAME}[${extra_name}] @ ${WHEEL_URI}"
           case "${{ matrix.target }}" in
             middleware)
               python -c "from xrpl_x402_middleware.adapters.x402 import register_exact_xrpl_server; assert callable(register_exact_xrpl_server)"
               ;;
             client)
               python -c "from xrpl_x402_client.adapters.x402 import register_exact_xrpl_client; assert callable(register_exact_xrpl_client)"
+              ;;
+            payer)
+              python -c "import xrpl_x402_payer.mcp as module; assert callable(module.main)"
               ;;
           esac

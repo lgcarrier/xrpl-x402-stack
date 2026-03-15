@@ -8,6 +8,7 @@ PACKAGE_SRC_ROOTS = [
     PROJECT_ROOT / "packages" / "facilitator" / "src",
     PROJECT_ROOT / "packages" / "middleware" / "src",
     PROJECT_ROOT / "packages" / "client" / "src",
+    PROJECT_ROOT / "packages" / "payer" / "src",
 ]
 
 if str(PROJECT_ROOT) not in sys.path:

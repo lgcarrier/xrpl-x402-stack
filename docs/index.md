@@ -6,6 +6,7 @@ Hosted docs for the XRPL-first x402 stack:
 - `xrpl-x402-facilitator`
 - `xrpl-x402-middleware`
 - `xrpl-x402-client`
+- `xrpl-x402-payer`
 
 [![GitHub repository](https://img.shields.io/badge/GitHub-xrpl--x402--stack-181717?logo=github&logoColor=white)](https://github.com/lgcarrier/xrpl-x402-stack)
 [![Docs version](https://img.shields.io/badge/docs-v0.1.0-0A7E3B)](release.md)
@@ -30,6 +31,7 @@ Pick the package for the role you are building. Most integrators start with `xrp
 | [Facilitator](packages/facilitator.md) | [![PyPI version](https://img.shields.io/pypi/v/xrpl-x402-facilitator?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-facilitator/) | `pip install xrpl-x402-facilitator` | You are running the verifier/settler service that sellers call during verify and settle. |
 | [Middleware](packages/middleware.md) | [![PyPI version](https://img.shields.io/pypi/v/xrpl-x402-middleware?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-middleware/) | `pip install xrpl-x402-middleware` | You are protecting ASGI or FastAPI routes that should return `402` until paid. |
 | [Client](packages/client.md) | [![PyPI version](https://img.shields.io/pypi/v/xrpl-x402-client?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-client/) | `pip install xrpl-x402-client` | You are building a buyer that signs XRPL payments and retries `402` challenges automatically. |
+| [Payer](packages/payer.md) | [![PyPI version](https://img.shields.io/pypi/v/xrpl-x402-payer?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-payer/) | `pip install xrpl-x402-payer` | You want a turnkey buyer CLI, local proxy, receipts, or native MCP support for Claude Desktop and Cursor. |
 
 If you want the shortest path to a working stack, read the [middleware quickstart](packages/middleware.md), the [client quickstart](packages/client.md), then run the [Testnet XRP quickstart](quickstart/testnet-xrp.md).
 
@@ -40,6 +42,7 @@ pip install xrpl-x402-core
 pip install xrpl-x402-facilitator
 pip install xrpl-x402-middleware
 pip install xrpl-x402-client
+pip install xrpl-x402-payer
 ```
 
 Optional Coinbase Python `x402` interop:
@@ -47,6 +50,15 @@ Optional Coinbase Python `x402` interop:
 ```bash
 pip install "xrpl-x402-middleware[x402]"
 pip install "xrpl-x402-client[x402]"
+```
+
+Full AI agent support:
+
+```bash
+pip install "xrpl-x402-payer[mcp]"
+xrpl-x402 skill install
+xrpl-x402 mcp
+claude mcp add xrpl-x402-payer -- xrpl-x402 mcp
 ```
 
 ## Comparison Table
@@ -57,6 +69,7 @@ pip install "xrpl-x402-client[x402]"
 | `xrpl-x402-facilitator` | Seller infrastructure / service tier | `create_app(...)`, `xrpl_x402_facilitator.main:app`, `xrpl-x402-facilitator` | It is the facilitator | None |
 | `xrpl-x402-middleware` | Seller app | `PaymentMiddlewareASGI`, `require_payment(...)`, `XRPLFacilitatorClient` | Yes | `[x402]` |
 | `xrpl-x402-client` | Buyer app or integration test harness | `XRPLPaymentSigner`, `XRPLPaymentTransport`, `wrap_httpx_with_xrpl_payment(...)` | Yes, against a protected seller route | `[x402]` |
+| `xrpl-x402-payer` | Buyer operator / local agent runtime | `xrpl-x402`, `pay_with_x402(...)`, `XRPLPayer`, bundled skill, stdio MCP server | Yes, against a protected seller route | `[mcp]` |
 
 ## Beyond XRP
 

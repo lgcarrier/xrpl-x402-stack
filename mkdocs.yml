@@ -1,5 +1,5 @@
 site_name: Open XRPL x402 Stack
-site_description: Python-first XRPL x402 facilitator, middleware, client, and shared core docs.
+site_description: Python-first XRPL x402 facilitator, middleware, client, payer, and shared core docs.
 site_url: https://lgcarrier.github.io/xrpl-x402-stack/
 repo_url: https://github.com/lgcarrier/xrpl-x402-stack
 repo_name: lgcarrier/xrpl-x402-stack
@@ -45,6 +45,7 @@ nav:
       - Facilitator: packages/facilitator.md
       - Middleware: packages/middleware.md
       - Client: packages/client.md
+      - Payer: packages/payer.md
   - How It Works:
       - Payment Flow: how-it-works/payment-flow.md
       - Header Contract: how-it-works/header-contract.md

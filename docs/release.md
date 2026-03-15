@@ -1,11 +1,12 @@
 # Release Playbook
 
-This repo publishes four Python packages with trusted publishing:
+This repo publishes five Python packages with trusted publishing:
 
 - `xrpl-x402-core`
 - `xrpl-x402-facilitator`
 - `xrpl-x402-middleware`
 - `xrpl-x402-client`
+- `xrpl-x402-payer`
 
 ## Trusted Publishing Setup
 
@@ -19,6 +20,7 @@ Create each project on both PyPI and TestPyPI, then add a trusted publisher with
   - `testpypi-facilitator` / `pypi-facilitator` for `xrpl-x402-facilitator`
   - `testpypi-middleware` / `pypi-middleware` for `xrpl-x402-middleware`
   - `testpypi-client` / `pypi-client` for `xrpl-x402-client`
+  - `testpypi-payer` / `pypi-payer` for `xrpl-x402-payer`
 
 Each package needs its own environment because PyPI/TestPyPI treat the GitHub OIDC identity as the combination of repository, workflow, and environment.
 
@@ -27,7 +29,8 @@ PyPI and TestPyPI currently allow only three pending trusted publishers at once.
 1. Register pending publishers for `core`, `facilitator`, and `middleware`.
 2. Publish `core` on the target index.
 3. Add the `client` pending publisher on that index.
-4. Continue with `facilitator`, `middleware`, and `client`.
+4. Add the `payer` pending publisher on that index.
+5. Continue with `facilitator`, `middleware`, `client`, and `payer`.
 
 GitHub environments used by the workflow:
 
@@ -35,14 +38,16 @@ GitHub environments used by the workflow:
 - `testpypi-facilitator`
 - `testpypi-middleware`
 - `testpypi-client`
+- `testpypi-payer`
 - `pypi-core`
 - `pypi-facilitator`
 - `pypi-middleware`
 - `pypi-client`
+- `pypi-payer`
 
 ## Version Prep
 
-Keep the first public release at `0.1.0` for all four packages.
+Keep the first public release at `0.1.0` for all five packages.
 
 Before publishing:
 
@@ -56,7 +61,7 @@ Run the standard release checks:
 
 ```bash
 pytest -q
-for package in packages/core packages/facilitator packages/middleware packages/client; do
+for package in packages/core packages/facilitator packages/middleware packages/client packages/payer; do
   (
     cd "$package"
     python -m build --sdist
@@ -86,6 +91,7 @@ Recommended order:
 2. `facilitator`
 3. `middleware`
 4. `client`
+5. `payer`
 
 If you use the GitHub CLI:
 
@@ -94,6 +100,7 @@ gh workflow run "Publish Python Package" -f package=core
 gh workflow run "Publish Python Package" -f package=facilitator
 gh workflow run "Publish Python Package" -f package=middleware
 gh workflow run "Publish Python Package" -f package=client
+gh workflow run "Publish Python Package" -f package=payer
 ```
 
 The workflow publishes to TestPyPI for `workflow_dispatch` runs and verifies clean installs after publishing.
@@ -110,6 +117,7 @@ pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ xrpl-x402-facilitator==0.1.0
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "xrpl-x402-middleware[x402]==0.1.0"
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "xrpl-x402-client[x402]==0.1.0"
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "xrpl-x402-payer[mcp]==0.1.0"
 ```
 
 ## Production Publish
@@ -132,6 +140,9 @@ git push origin middleware-v0.1.0
 
 git tag client-v0.1.0
 git push origin client-v0.1.0
+
+git tag payer-v0.1.0
+git push origin payer-v0.1.0
 ```
 
 The publish workflow fails if the tag version and the package `version` field do not match.
@@ -154,4 +165,5 @@ pip install xrpl-x402-core==0.1.0
 pip install xrpl-x402-facilitator==0.1.0
 pip install "xrpl-x402-middleware[x402]==0.1.0"
 pip install "xrpl-x402-client[x402]==0.1.0"
+pip install "xrpl-x402-payer[mcp]==0.1.0"
 ```
