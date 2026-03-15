@@ -1,28 +1,24 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
-import socket
-import threading
-import time
-from typing import Iterator
+import asyncio
 
 from fastapi import FastAPI, Request
-from fastapi.testclient import TestClient
+import httpx
 from slowapi import Limiter as SlowLimiter
-import uvicorn
+from xrpl.wallet import Wallet
 
-import app.factory as factory_module
-from app.config import Settings
-from app.factory import create_app
-from app.models import AssetDescriptor, SettleResponse, StructuredAmount, VerifyResponse
+import xrpl_x402_facilitator.factory as factory_module
+from xrpl_x402_client import XRPLPaymentSigner, wrap_httpx_with_xrpl_payment
+from xrpl_x402_core import PaymentResponse, decode_model_from_base64
+from xrpl_x402_facilitator.config import Settings
+from xrpl_x402_facilitator.factory import create_app
+from xrpl_x402_facilitator.models import AssetDescriptor, SettleResponse, StructuredAmount, VerifyResponse
+from xrpl_x402_middleware import XRPLFacilitatorClient
 from xrpl_x402_middleware.middleware import PAYMENT_RESPONSE_HEADER, PaymentMiddlewareASGI, require_payment
-from xrpl_x402_middleware.types import PaymentPayload, PaymentResponse
-from xrpl_x402_middleware.utils import decode_model_from_base64, encode_model_to_base64
 
 FACILITATOR_TOKEN = "local-facilitator-token"
-DESTINATION = "rLOCALDESTINATION123456789"
+DESTINATION = "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe"
 PAYER = "rLOCALPAYER123456789"
-SIGNED_TX_BLOB = "signed-local-blob"
 INVOICE_ID = "LOCAL-INVOICE-123"
 TX_HASH = "LOCAL-TX-HASH-123"
 
@@ -90,46 +86,6 @@ def _create_app_with_in_memory_rate_limiter(
         factory_module.build_rate_limiter = original_build_rate_limiter
 
 
-@contextmanager
-def _run_local_facilitator(app: FastAPI) -> Iterator[str]:
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(("127.0.0.1", 0))
-    sock.listen(128)
-    host, port = sock.getsockname()
-
-    config = uvicorn.Config(
-        app=app,
-        host="127.0.0.1",
-        port=port,
-        log_level="warning",
-    )
-    server = uvicorn.Server(config)
-    thread = threading.Thread(
-        target=server.run,
-        kwargs={"sockets": [sock]},
-        daemon=True,
-    )
-    thread.start()
-
-    deadline = time.time() + 5
-    while not server.started:
-        if not thread.is_alive():
-            raise RuntimeError("Local facilitator server exited before startup")
-        if time.time() >= deadline:
-            raise RuntimeError("Timed out waiting for local facilitator startup")
-        time.sleep(0.01)
-
-    try:
-        yield f"http://{host}:{port}"
-    finally:
-        server.should_exit = True
-        thread.join(timeout=5)
-        sock.close()
-        if thread.is_alive():
-            raise RuntimeError("Local facilitator server did not shut down cleanly")
-
-
 def test_middleware_uses_real_local_facilitator_instance() -> None:
     facilitator_service = RecordingFacilitatorService()
     facilitator_settings = Settings(
@@ -146,45 +102,59 @@ def test_middleware_uses_real_local_facilitator_instance() -> None:
         xrpl_service=facilitator_service,
     )
 
-    with _run_local_facilitator(facilitator_app) as facilitator_url:
-        middleware_app = FastAPI()
+    middleware_app = FastAPI()
 
-        @middleware_app.get("/paid")
-        async def paid(request: Request) -> dict[str, str]:
-            payment = request.state.x402_payment
-            return {
-                "invoice_id": payment.invoice_id,
-                "tx_hash": payment.tx_hash,
-                "payer": payment.payer,
-            }
+    @middleware_app.get("/paid")
+    async def paid(request: Request) -> dict[str, str]:
+        payment = request.state.x402_payment
+        return {
+            "invoice_id": payment.invoice_id,
+            "tx_hash": payment.tx_hash,
+            "payer": payment.payer,
+        }
 
-        middleware_app.add_middleware(
-            PaymentMiddlewareASGI,
-            route_configs={
-                "GET /paid": require_payment(
-                    facilitator_url=facilitator_url,
-                    bearer_token=FACILITATOR_TOKEN,
-                    pay_to=DESTINATION,
-                    network="xrpl:1",
-                    xrp_drops=1000,
-                    description="Local facilitator integration route",
-                )
-            },
-        )
+    async_facilitator_client = httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=facilitator_app),
+        base_url="http://facilitator.local",
+    )
 
-        payment_payload = PaymentPayload(
-            network="xrpl:1",
-            payload={
-                "signedTxBlob": SIGNED_TX_BLOB,
-                "invoiceId": INVOICE_ID,
-            },
-        )
-
-        with TestClient(middleware_app) as client:
-            response = client.get(
-                "/paid",
-                headers={"PAYMENT-SIGNATURE": encode_model_to_base64(payment_payload)},
+    middleware_app.add_middleware(
+        PaymentMiddlewareASGI,
+        route_configs={
+            "GET /paid": require_payment(
+                facilitator_url="http://facilitator.local",
+                bearer_token=FACILITATOR_TOKEN,
+                pay_to=DESTINATION,
+                network="xrpl:1",
+                xrp_drops=1000,
+                description="Local facilitator integration route",
             )
+        },
+        client_factory=lambda facilitator_url, bearer_token: XRPLFacilitatorClient(
+            base_url=facilitator_url,
+            bearer_token=bearer_token,
+            async_client=async_facilitator_client,
+        ),
+    )
+
+    signer = XRPLPaymentSigner(
+        Wallet.create(),
+        network="xrpl:1",
+        autofill_enabled=False,
+    )
+
+    async def _make_paid_request() -> httpx.Response:
+        transport = httpx.ASGITransport(app=middleware_app)
+        async with wrap_httpx_with_xrpl_payment(
+            signer,
+            transport=transport,
+            base_url="http://merchant.local",
+        ) as client:
+            response = await client.get("/paid")
+        await async_facilitator_client.aclose()
+        return response
+
+    response = asyncio.run(_make_paid_request())
 
     assert response.status_code == 200
     assert response.json() == {
@@ -199,5 +169,9 @@ def test_middleware_uses_real_local_facilitator_instance() -> None:
     assert payment_response.invoice_id == INVOICE_ID
     assert payment_response.tx_hash == TX_HASH
     assert payment_response.payer == PAYER
-    assert facilitator_service.verify_calls == [(SIGNED_TX_BLOB, INVOICE_ID)]
-    assert facilitator_service.settle_calls == [(SIGNED_TX_BLOB, INVOICE_ID)]
+    assert len(facilitator_service.verify_calls) == 1
+    assert len(facilitator_service.settle_calls) == 1
+    assert facilitator_service.verify_calls[0][1] is None
+    assert facilitator_service.settle_calls[0][1] is None
+    assert facilitator_service.verify_calls[0][0]
+    assert facilitator_service.settle_calls[0][0] == facilitator_service.verify_calls[0][0]
