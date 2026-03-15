@@ -39,6 +39,10 @@ nav:
       - Client: packages/client.md
   - How It Works:
       - Payment Flow: how-it-works/payment-flow.md
+      - Header Contract: how-it-works/header-contract.md
+      - Replay And Freshness: how-it-works/replay-and-freshness.md
+  - Integrations:
+      - Coinbase x402 Adapters: integrations/x402-adapters.md
   - Troubleshooting: troubleshooting.md
   - Release:
       - Release Playbook: release.md
