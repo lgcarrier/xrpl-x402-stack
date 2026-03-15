@@ -42,14 +42,16 @@ Changelog = "https://github.com/lgcarrier/xrpl-x402-stack/blob/main/CHANGELOG.md
 [tool.hatch.build.targets.wheel]
 packages = ["src/xrpl_x402_middleware"]
 
+[tool.hatch.build.hooks.custom]
+path = "build_hook.py"
+
 [tool.hatch.build.targets.wheel.force-include]
-"../../LICENSE" = "LICENSE"
+"LICENSE" = "LICENSE"
 
 [tool.hatch.build.targets.sdist]
 include = [
   "/src/xrpl_x402_middleware",
   "/README.md",
+  "/LICENSE",
+  "/build_hook.py",
 ]
-
-[tool.hatch.build.targets.sdist.force-include]
-"../../LICENSE" = "LICENSE"
