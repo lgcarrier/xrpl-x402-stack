@@ -22,12 +22,16 @@ That flow uses:
 
 ## Package Chooser
 
+Pick the package for the role you are building. Most integrators start with `xrpl-x402-middleware` on the seller side or `xrpl-x402-client` on the buyer side, then add `xrpl-x402-facilitator` as the verifier/settler service.
+
 | Package | PyPI | Install | Use when |
 | --- | --- | --- | --- |
-| [Core](packages/core.md) | [![PyPI package](https://img.shields.io/badge/PyPI-xrpl--x402--core-3775A9?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-core/) | `pip install xrpl-x402-core` | You need the shared XRPL/x402 models, codecs, and helpers directly. |
-| [Facilitator](packages/facilitator.md) | [![PyPI package](https://img.shields.io/badge/PyPI-xrpl--x402--facilitator-3775A9?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-facilitator/) | `pip install xrpl-x402-facilitator` | You need the verifier/settler service. |
-| [Middleware](packages/middleware.md) | [![PyPI package](https://img.shields.io/badge/PyPI-xrpl--x402--middleware-3775A9?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-middleware/) | `pip install xrpl-x402-middleware` | You want to protect ASGI or FastAPI routes. |
-| [Client](packages/client.md) | [![PyPI package](https://img.shields.io/badge/PyPI-xrpl--x402--client-3775A9?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-client/) | `pip install xrpl-x402-client` | You want a buyer-side SDK that signs XRPL payments and retries `402` responses. |
+| [Core](packages/core.md) | [![PyPI version](https://img.shields.io/pypi/v/xrpl-x402-core?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-core/) | `pip install xrpl-x402-core` | You need the shared XRPL/x402 models, codecs, and header helpers directly. |
+| [Facilitator](packages/facilitator.md) | [![PyPI version](https://img.shields.io/pypi/v/xrpl-x402-facilitator?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-facilitator/) | `pip install xrpl-x402-facilitator` | You are running the verifier/settler service that sellers call during verify and settle. |
+| [Middleware](packages/middleware.md) | [![PyPI version](https://img.shields.io/pypi/v/xrpl-x402-middleware?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-middleware/) | `pip install xrpl-x402-middleware` | You are protecting ASGI or FastAPI routes that should return `402` until paid. |
+| [Client](packages/client.md) | [![PyPI version](https://img.shields.io/pypi/v/xrpl-x402-client?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-client/) | `pip install xrpl-x402-client` | You are building a buyer that signs XRPL payments and retries `402` challenges automatically. |
+
+If you want the shortest path to a working stack, read the [middleware quickstart](packages/middleware.md), the [client quickstart](packages/client.md), then run the [Testnet XRP quickstart](quickstart/testnet-xrp.md).
 
 ## Install Commands
 

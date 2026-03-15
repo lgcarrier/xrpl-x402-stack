@@ -1,6 +1,6 @@
 # xrpl-x402-facilitator
 
-[![PyPI package](https://img.shields.io/badge/PyPI-xrpl--x402--facilitator-3775A9?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-facilitator/)
+[![PyPI version](https://img.shields.io/pypi/v/xrpl-x402-facilitator?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-facilitator/)
 [![Source directory](https://img.shields.io/badge/GitHub-packages%2Ffacilitator-181717?logo=github&logoColor=white)](https://github.com/lgcarrier/xrpl-x402-stack/tree/main/packages/facilitator)
 
 Install:
