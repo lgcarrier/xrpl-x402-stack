@@ -27,16 +27,21 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
-          pip install -e .
 
       - name: Build package artifacts
-        run: python -m build
+        run: |
+          for package in packages/core packages/facilitator packages/middleware packages/client; do
+            (cd "$package" && python -m build)
+          done
 
       - name: Validate package metadata
-        run: twine check dist/*
+        run: twine check packages/*/dist/*
+
+      - name: Smoke import stack packages
+        run: python -c "import xrpl_x402_core, xrpl_x402_facilitator, xrpl_x402_middleware, xrpl_x402_client"
 
       - name: Compile source files
-        run: PYTHONPYCACHEPREFIX=/tmp/pycache python -m compileall app src tests
+        run: PYTHONPYCACHEPREFIX=/tmp/pycache python -m compileall packages tests examples devtools
 
       - name: Run pytest
         run: PYTHONPYCACHEPREFIX=/tmp/pycache pytest -q

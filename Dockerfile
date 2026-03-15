@@ -6,11 +6,11 @@ RUN addgroup --system app \
     && chown app:app /app
 
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY packages ./packages
+COPY examples ./examples
+RUN pip install --no-cache-dir /app/packages/core /app/packages/facilitator /app/packages/middleware /app/packages/client
 
-COPY --chown=app:app app ./app
 USER app
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["xrpl-x402-facilitator", "--host", "0.0.0.0", "--port", "8000"]

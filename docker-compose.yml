@@ -11,6 +11,33 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
     restart: unless-stopped
+  merchant:
+    build: .
+    depends_on:
+      facilitator:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8010:8010"
+    command: ["uvicorn", "examples.merchant_fastapi.app:app", "--host", "0.0.0.0", "--port", "8010"]
+    environment:
+      FACILITATOR_URL: http://facilitator:8000
+      FACILITATOR_TOKEN: ${FACILITATOR_BEARER_TOKEN:-local-facilitator-token}
+      MERCHANT_XRPL_ADDRESS: ${MY_DESTINATION_ADDRESS:-rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe}
+      XRPL_NETWORK: ${NETWORK_ID:-xrpl:1}
+      PRICE_DROPS: ${PRICE_DROPS:-1000}
+    restart: unless-stopped
+  buyer:
+    profiles: ["demo"]
+    build: .
+    depends_on:
+      merchant:
+        condition: service_started
+    command: ["python", "examples/buyer_httpx.py"]
+    environment:
+      TARGET_URL: http://merchant:8010/premium
+      XRPL_RPC_URL: ${XRPL_RPC_URL:-https://s.altnet.rippletest.net:51234}
+      XRPL_NETWORK: ${NETWORK_ID:-xrpl:1}
+      XRPL_WALLET_SEED: ${XRPL_WALLET_SEED:-}
   redis:
     image: redis:7-alpine
     healthcheck:

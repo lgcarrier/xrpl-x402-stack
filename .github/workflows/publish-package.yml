@@ -2,16 +2,75 @@ name: Publish Python Package
 
 on:
   workflow_dispatch:
+    inputs:
+      package:
+        description: Package to publish
+        required: true
+        type: choice
+        options:
+          - core
+          - facilitator
+          - middleware
+          - client
   push:
     tags:
-      - "v*"
+      - "core-v*"
+      - "facilitator-v*"
+      - "middleware-v*"
+      - "client-v*"
 
 permissions:
   contents: read
   id-token: write
 
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      package_dir: ${{ steps.resolve.outputs.package_dir }}
+      package_name: ${{ steps.resolve.outputs.package_name }}
+      artifact_name: ${{ steps.resolve.outputs.artifact_name }}
+
+    steps:
+      - name: Resolve package target
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            target="${{ github.event.inputs.package }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+            target="${tag%%-v*}"
+          fi
+
+          case "$target" in
+            core)
+              echo "package_dir=packages/core" >> "$GITHUB_OUTPUT"
+              echo "package_name=xrpl-x402-core" >> "$GITHUB_OUTPUT"
+              echo "artifact_name=core-distributions" >> "$GITHUB_OUTPUT"
+              ;;
+            facilitator)
+              echo "package_dir=packages/facilitator" >> "$GITHUB_OUTPUT"
+              echo "package_name=xrpl-x402-facilitator" >> "$GITHUB_OUTPUT"
+              echo "artifact_name=facilitator-distributions" >> "$GITHUB_OUTPUT"
+              ;;
+            middleware)
+              echo "package_dir=packages/middleware" >> "$GITHUB_OUTPUT"
+              echo "package_name=xrpl-x402-middleware" >> "$GITHUB_OUTPUT"
+              echo "artifact_name=middleware-distributions" >> "$GITHUB_OUTPUT"
+              ;;
+            client)
+              echo "package_dir=packages/client" >> "$GITHUB_OUTPUT"
+              echo "package_name=xrpl-x402-client" >> "$GITHUB_OUTPUT"
+              echo "artifact_name=client-distributions" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unsupported package target: $target" >&2
+              exit 1
+              ;;
+          esac
+
   build:
+    needs: resolve
     runs-on: ubuntu-latest
 
     steps:
@@ -30,30 +89,32 @@ jobs:
           pip install build twine
 
       - name: Build distribution artifacts
-        run: python -m build
+        run: |
+          cd "${{ needs.resolve.outputs.package_dir }}"
+          python -m build
 
       - name: Validate built metadata
-        run: twine check dist/*
+        run: twine check "${{ needs.resolve.outputs.package_dir }}/dist/"*
 
       - name: Upload distribution artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: python-package-distributions
-          path: dist/
+          name: ${{ needs.resolve.outputs.artifact_name }}
+          path: ${{ needs.resolve.outputs.package_dir }}/dist/
 
   publish-testpypi:
     if: github.event_name == 'workflow_dispatch'
-    needs: build
+    needs: [resolve, build]
     runs-on: ubuntu-latest
     environment:
       name: testpypi
-      url: https://test.pypi.org/project/xrpl-x402-middleware/
+      url: https://test.pypi.org/
 
     steps:
       - name: Download distribution artifacts
         uses: actions/download-artifact@v4
         with:
-          name: python-package-distributions
+          name: ${{ needs.resolve.outputs.artifact_name }}
           path: dist/
 
       - name: Publish to TestPyPI
@@ -63,17 +124,17 @@ jobs:
 
   publish-pypi:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    needs: build
+    needs: [resolve, build]
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/project/xrpl-x402-middleware/
+      url: https://pypi.org/project/${{ needs.resolve.outputs.package_name }}/
 
     steps:
       - name: Download distribution artifacts
         uses: actions/download-artifact@v4
         with:
-          name: python-package-distributions
+          name: ${{ needs.resolve.outputs.artifact_name }}
           path: dist/
 
       - name: Publish to PyPI
