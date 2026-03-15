@@ -1,0 +1,9 @@
+.md-footer-meta__inner img {
+  height: 20px;
+  margin: 0 0.35rem 0.2rem 0;
+  vertical-align: middle;
+}
+
+.md-footer-meta__inner .footer-badge-link {
+  display: inline-block;
+}

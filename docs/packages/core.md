@@ -1,5 +1,8 @@
 # xrpl-x402-core
 
+[![PyPI package](https://img.shields.io/badge/PyPI-xrpl--x402--core-3775A9?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-core/)
+[![Source directory](https://img.shields.io/badge/GitHub-packages%2Fcore-181717?logo=github&logoColor=white)](https://github.com/lgcarrier/xrpl-x402-stack/tree/main/packages/core)
+
 Install:
 
 ```bash

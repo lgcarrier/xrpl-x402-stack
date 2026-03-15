@@ -1,5 +1,8 @@
 # xrpl-x402-middleware
 
+[![PyPI package](https://img.shields.io/badge/PyPI-xrpl--x402--middleware-3775A9?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-middleware/)
+[![Source directory](https://img.shields.io/badge/GitHub-packages%2Fmiddleware-181717?logo=github&logoColor=white)](https://github.com/lgcarrier/xrpl-x402-stack/tree/main/packages/middleware)
+
 Install:
 
 ```bash

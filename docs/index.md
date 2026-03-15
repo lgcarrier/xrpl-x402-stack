@@ -7,6 +7,9 @@ Hosted docs for the XRPL-first x402 stack:
 - `xrpl-x402-middleware`
 - `xrpl-x402-client`
 
+[![GitHub repository](https://img.shields.io/badge/GitHub-xrpl--x402--stack-181717?logo=github&logoColor=white)](https://github.com/lgcarrier/xrpl-x402-stack)
+[![Docs version](https://img.shields.io/badge/docs-v0.1.0-0A7E3B)](release.md)
+
 ## Start Here
 
 If you want to see a real payment succeed on XRPL Testnet, go straight to the [Testnet XRP quickstart](quickstart/testnet-xrp.md).
@@ -19,10 +22,37 @@ That flow uses:
 
 ## Package Chooser
 
-- Use [Facilitator](packages/facilitator.md) when you need the verifier/settler service.
-- Use [Middleware](packages/middleware.md) when you want to protect ASGI or FastAPI routes. Start with the package quickstart on that page.
-- Use [Client](packages/client.md) when you want a buyer-side SDK that signs XRPL payments and retries `402` responses. Start with the package quickstart on that page.
-- Use [Core](packages/core.md) when you need the shared wire models, codecs, and helpers directly.
+| Package | PyPI | Install | Use when |
+| --- | --- | --- | --- |
+| [Core](packages/core.md) | [![PyPI package](https://img.shields.io/badge/PyPI-xrpl--x402--core-3775A9?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-core/) | `pip install xrpl-x402-core` | You need the shared XRPL/x402 models, codecs, and helpers directly. |
+| [Facilitator](packages/facilitator.md) | [![PyPI package](https://img.shields.io/badge/PyPI-xrpl--x402--facilitator-3775A9?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-facilitator/) | `pip install xrpl-x402-facilitator` | You need the verifier/settler service. |
+| [Middleware](packages/middleware.md) | [![PyPI package](https://img.shields.io/badge/PyPI-xrpl--x402--middleware-3775A9?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-middleware/) | `pip install xrpl-x402-middleware` | You want to protect ASGI or FastAPI routes. |
+| [Client](packages/client.md) | [![PyPI package](https://img.shields.io/badge/PyPI-xrpl--x402--client-3775A9?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-client/) | `pip install xrpl-x402-client` | You want a buyer-side SDK that signs XRPL payments and retries `402` responses. |
+
+## Install Commands
+
+```bash
+pip install xrpl-x402-core
+pip install xrpl-x402-facilitator
+pip install xrpl-x402-middleware
+pip install xrpl-x402-client
+```
+
+Optional Coinbase Python `x402` interop:
+
+```bash
+pip install "xrpl-x402-middleware[x402]"
+pip install "xrpl-x402-client[x402]"
+```
+
+## Comparison Table
+
+| Package | Runs where | Main entry points | Depends on facilitator | Optional extras |
+| --- | --- | --- | --- | --- |
+| `xrpl-x402-core` | Shared library code | `PaymentRequired`, `PaymentPayload`, `PaymentResponse`, header codecs | No | None |
+| `xrpl-x402-facilitator` | Seller infrastructure / service tier | `create_app(...)`, `xrpl_x402_facilitator.main:app`, `xrpl-x402-facilitator` | It is the facilitator | None |
+| `xrpl-x402-middleware` | Seller app | `PaymentMiddlewareASGI`, `require_payment(...)`, `XRPLFacilitatorClient` | Yes | `[x402]` |
+| `xrpl-x402-client` | Buyer app or integration test harness | `XRPLPaymentSigner`, `XRPLPaymentTransport`, `wrap_httpx_with_xrpl_payment(...)` | Yes, against a protected seller route | `[x402]` |
 
 ## Beyond XRP
 
