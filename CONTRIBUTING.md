@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for contributing to `xrpl-x402-facilitator`.
+Thanks for contributing to `xrpl-x402-stack`.
 
 ## Development Setup
 
@@ -29,6 +29,13 @@ RUN_XRPL_TESTNET_LIVE=1 pytest -m live tests/integration/test_live_testnet.py -s
 For routine changes outside those areas, the live XRPL Testnet test remains
 opt-in because it depends on external network availability and faucet funding.
 
+If your change touches docs, onboarding, or the hosted docs site, also run:
+
+```bash
+pip install -r docs/requirements.txt
+mkdocs build --strict
+```
+
 ## Package Releases
 
 This repo publishes four packages independently:
@@ -41,15 +48,27 @@ This repo publishes four packages independently:
 Recommended verification before publishing:
 
 ```bash
+pytest -q
 for package in packages/core packages/facilitator packages/middleware packages/client; do
-  (cd "$package" && python -m build)
+  (
+    cd "$package"
+    python -m build --sdist
+    python -m build --wheel
+  )
 done
 twine check packages/*/dist/*
+PYTHONPYCACHEPREFIX=/tmp/pycache python -m compileall packages tests examples devtools
+docker build -t xrpl-x402-facilitator .
 ```
+
+The hosted docs site is built with MkDocs Material and deployed through
+`.github/workflows/docs-pages.yml`.
 
 Release flow:
 
-- Run the `Publish Python Package` workflow manually for a TestPyPI dry run.
+- Follow [docs/release.md](docs/release.md) for the full trusted-publishing setup and release playbook.
+- Run the `Publish Python Package` workflow manually for a TestPyPI rehearsal.
+- Publish `core` first, wait for index availability, then publish `facilitator`, `middleware`, and `client`.
 - Push one of these tag prefixes to publish to PyPI:
   - `core-v*`
   - `facilitator-v*`

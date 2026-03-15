@@ -6,10 +6,15 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:8000:8000"
-    env_file:
-      - .env
     environment:
+      GATEWAY_AUTH_MODE: ${GATEWAY_AUTH_MODE:-single_token}
+      XRPL_RPC_URL: ${XRPL_RPC_URL:-https://s.altnet.rippletest.net:51234}
+      MY_DESTINATION_ADDRESS: ${MY_DESTINATION_ADDRESS:-rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe}
+      FACILITATOR_BEARER_TOKEN: ${FACILITATOR_BEARER_TOKEN:-local-facilitator-token}
       REDIS_URL: redis://redis:6379/0
+      NETWORK_ID: ${NETWORK_ID:-xrpl:1}
+      SETTLEMENT_MODE: ${SETTLEMENT_MODE:-validated}
+      ENABLE_API_DOCS: ${ENABLE_API_DOCS:-false}
     restart: unless-stopped
   merchant:
     build: .
@@ -25,6 +30,9 @@ services:
       MERCHANT_XRPL_ADDRESS: ${MY_DESTINATION_ADDRESS:-rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe}
       XRPL_NETWORK: ${NETWORK_ID:-xrpl:1}
       PRICE_DROPS: ${PRICE_DROPS:-1000}
+      PRICE_ASSET_CODE: ${PRICE_ASSET_CODE:-XRP}
+      PRICE_ASSET_ISSUER: ${PRICE_ASSET_ISSUER:-}
+      PRICE_ASSET_AMOUNT: ${PRICE_ASSET_AMOUNT:-}
     restart: unless-stopped
   buyer:
     profiles: ["demo"]
@@ -36,8 +44,9 @@ services:
     environment:
       TARGET_URL: http://merchant:8010/premium
       XRPL_RPC_URL: ${XRPL_RPC_URL:-https://s.altnet.rippletest.net:51234}
-      XRPL_NETWORK: ${NETWORK_ID:-xrpl:1}
+      XRPL_NETWORK: ${XRPL_NETWORK:-xrpl:1}
       XRPL_WALLET_SEED: ${XRPL_WALLET_SEED:-}
+      PAYMENT_ASSET: ${PAYMENT_ASSET:-XRP:native}
   redis:
     image: redis:7-alpine
     healthcheck:

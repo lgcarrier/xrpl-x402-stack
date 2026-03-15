@@ -6,6 +6,7 @@ RUN addgroup --system app \
     && chown app:app /app
 
 WORKDIR /app
+COPY LICENSE ./LICENSE
 COPY packages ./packages
 COPY examples ./examples
 RUN pip install --no-cache-dir /app/packages/core /app/packages/facilitator /app/packages/middleware /app/packages/client

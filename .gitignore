@@ -1,5 +1,6 @@
 .DS_Store
 .env
+.env.quickstart
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -12,6 +13,7 @@ __pycache__/
 .coverage.*
 build/
 dist/
+site/
 coverage.xml
 htmlcov/
 

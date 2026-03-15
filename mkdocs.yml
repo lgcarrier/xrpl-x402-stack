@@ -1,0 +1,44 @@
+site_name: Open XRPL x402 Stack
+site_description: Python-first XRPL x402 facilitator, middleware, client, and shared core docs.
+site_url: https://lgcarrier.github.io/xrpl-x402-stack/
+repo_url: https://github.com/lgcarrier/xrpl-x402-stack
+repo_name: lgcarrier/xrpl-x402-stack
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+    - search.suggest
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - Guided Quickstart:
+      - Testnet XRP: quickstart/testnet-xrp.md
+  - Asset Guides:
+      - RLUSD: asset-guides/rlusd.md
+      - USDC: asset-guides/usdc.md
+  - Package Guides:
+      - Core: packages/core.md
+      - Facilitator: packages/facilitator.md
+      - Middleware: packages/middleware.md
+      - Client: packages/client.md
+  - How It Works:
+      - Payment Flow: how-it-works/payment-flow.md
+  - Troubleshooting: troubleshooting.md
+  - Release:
+      - Release Playbook: release.md

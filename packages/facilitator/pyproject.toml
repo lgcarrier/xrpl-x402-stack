@@ -13,6 +13,16 @@ authors = [
   { name = "Louis-Guillaume Carrier-Bedard", email = "lgcarrier@gmail.com" },
 ]
 keywords = ["xrpl", "x402", "facilitator", "fastapi", "payments"]
+classifiers = [
+  "Framework :: FastAPI",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Topic :: Internet :: WWW/HTTP",
+  "Typing :: Typed",
+]
 dependencies = [
   "fastapi==0.115.0",
   "pydantic-settings==2.6.1",
@@ -29,16 +39,23 @@ dependencies = [
 xrpl-x402-facilitator = "xrpl_x402_facilitator.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/lgcarrier/xrpl-x402-facilitator"
-Documentation = "https://github.com/lgcarrier/xrpl-x402-facilitator"
-Repository = "https://github.com/lgcarrier/xrpl-x402-facilitator"
-Issues = "https://github.com/lgcarrier/xrpl-x402-facilitator/issues"
+Homepage = "https://github.com/lgcarrier/xrpl-x402-stack"
+Documentation = "https://lgcarrier.github.io/xrpl-x402-stack/packages/facilitator/"
+Repository = "https://github.com/lgcarrier/xrpl-x402-stack"
+Issues = "https://github.com/lgcarrier/xrpl-x402-stack/issues"
+Changelog = "https://github.com/lgcarrier/xrpl-x402-stack/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/xrpl_x402_facilitator"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"../../LICENSE" = "LICENSE"
 
 [tool.hatch.build.targets.sdist]
 include = [
   "/src/xrpl_x402_facilitator",
   "/README.md",
 ]
+
+[tool.hatch.build.targets.sdist.force-include]
+"../../LICENSE" = "LICENSE"

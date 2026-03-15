@@ -27,11 +27,24 @@ jobs:
   resolve:
     runs-on: ubuntu-latest
     outputs:
+      target: ${{ steps.resolve.outputs.target }}
       package_dir: ${{ steps.resolve.outputs.package_dir }}
       package_name: ${{ steps.resolve.outputs.package_name }}
       artifact_name: ${{ steps.resolve.outputs.artifact_name }}
+      package_version: ${{ steps.metadata.outputs.package_version }}
+      core_requirement: ${{ steps.metadata.outputs.core_requirement }}
+      index_url: ${{ steps.indexes.outputs.index_url }}
+      extra_index_url: ${{ steps.indexes.outputs.extra_index_url }}
 
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Resolve package target
         id: resolve
         run: |
@@ -41,6 +54,8 @@ jobs:
             tag="${GITHUB_REF_NAME}"
             target="${tag%%-v*}"
           fi
+
+          echo "target=$target" >> "$GITHUB_OUTPUT"
 
           case "$target" in
             core)
@@ -69,6 +84,51 @@ jobs:
               ;;
           esac
 
+      - name: Resolve package metadata
+        id: metadata
+        env:
+          PACKAGE_DIR: ${{ steps.resolve.outputs.package_dir }}
+        run: |
+          python - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          pyproject_path = Path(os.environ["PACKAGE_DIR"]) / "pyproject.toml"
+          pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+          project = pyproject["project"]
+          version = project["version"]
+          core_requirement = ""
+          for dependency in project.get("dependencies", []):
+              if dependency.startswith("xrpl-x402-core"):
+                  core_requirement = dependency
+                  break
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+              handle.write(f"package_version={version}\n")
+              handle.write(f"core_requirement={core_requirement}\n")
+          PY
+
+      - name: Resolve publish indexes
+        id: indexes
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "index_url=https://test.pypi.org/simple/" >> "$GITHUB_OUTPUT"
+            echo "extra_index_url=https://pypi.org/simple/" >> "$GITHUB_OUTPUT"
+          else
+            echo "index_url=https://pypi.org/simple/" >> "$GITHUB_OUTPUT"
+            echo "extra_index_url=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate tag version matches package version
+        if: github.event_name == 'push'
+        run: |
+          expected_tag="${{ steps.resolve.outputs.target }}-v${{ steps.metadata.outputs.package_version }}"
+          if [ "$GITHUB_REF_NAME" != "$expected_tag" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $expected_tag" >&2
+            exit 1
+          fi
+
   build:
     needs: resolve
     runs-on: ubuntu-latest
@@ -88,10 +148,33 @@ jobs:
           python -m pip install --upgrade pip
           pip install build twine
 
+      - name: Verify core dependency is available on target index
+        if: needs.resolve.outputs.package_name != 'xrpl-x402-core'
+        env:
+          CORE_REQUIREMENT: ${{ needs.resolve.outputs.core_requirement }}
+          INDEX_URL: ${{ needs.resolve.outputs.index_url }}
+          EXTRA_INDEX_URL: ${{ needs.resolve.outputs.extra_index_url }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            args=(download --no-deps --dest /tmp/core-index-check --index-url "$INDEX_URL")
+            if [ -n "$EXTRA_INDEX_URL" ]; then
+              args+=(--extra-index-url "$EXTRA_INDEX_URL")
+            fi
+            if python -m pip "${args[@]}" "$CORE_REQUIREMENT"; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 6 ]; then
+              echo "Unable to resolve required core dependency from the release index" >&2
+              exit 1
+            fi
+            sleep 15
+          done
+
       - name: Build distribution artifacts
         run: |
           cd "${{ needs.resolve.outputs.package_dir }}"
-          python -m build
+          python -m build --sdist
+          python -m build --wheel
 
       - name: Validate built metadata
         run: twine check "${{ needs.resolve.outputs.package_dir }}/dist/"*
@@ -122,6 +205,86 @@ jobs:
         with:
           repository-url: https://test.pypi.org/legacy/
 
+  verify-testpypi-install:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [resolve, publish-testpypi]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify clean install from TestPyPI
+        env:
+          TARGET: ${{ needs.resolve.outputs.target }}
+          PACKAGE_NAME: ${{ needs.resolve.outputs.package_name }}
+          PACKAGE_VERSION: ${{ needs.resolve.outputs.package_version }}
+          INDEX_URL: ${{ needs.resolve.outputs.index_url }}
+          EXTRA_INDEX_URL: ${{ needs.resolve.outputs.extra_index_url }}
+        run: |
+          verify_install() {
+            requirement="$1"
+            venv_path="$2"
+
+            for attempt in 1 2 3 4 5 6; do
+              rm -rf "$venv_path"
+              python -m venv "$venv_path"
+              . "$venv_path/bin/activate"
+              python -m pip install --upgrade pip
+
+              args=(install --index-url "$INDEX_URL")
+              if [ -n "$EXTRA_INDEX_URL" ]; then
+                args+=(--extra-index-url "$EXTRA_INDEX_URL")
+              fi
+
+              if python -m pip "${args[@]}" "$requirement"; then
+                case "$TARGET" in
+                  core)
+                    python -c "import xrpl_x402_core as package; assert package.XRP_CODE == 'XRP'"
+                    ;;
+                  facilitator)
+                    python -c "from xrpl_x402_facilitator import create_app; assert callable(create_app)"
+                    xrpl-x402-facilitator --help >/dev/null
+                    ;;
+                  middleware)
+                    if [ "$requirement" = "${PACKAGE_NAME}[x402]==${PACKAGE_VERSION}" ]; then
+                      python -c "from xrpl_x402_middleware.adapters.x402 import register_exact_xrpl_server; assert callable(register_exact_xrpl_server)"
+                    else
+                      python -c "from xrpl_x402_middleware import PaymentMiddlewareASGI; assert PaymentMiddlewareASGI"
+                    fi
+                    ;;
+                  client)
+                    if [ "$requirement" = "${PACKAGE_NAME}[x402]==${PACKAGE_VERSION}" ]; then
+                      python -c "from xrpl_x402_client.adapters.x402 import register_exact_xrpl_client; assert callable(register_exact_xrpl_client)"
+                    else
+                      python -c "from xrpl_x402_client import XRPLPaymentSigner; assert XRPLPaymentSigner"
+                    fi
+                    ;;
+                esac
+                deactivate
+                rm -rf "$venv_path"
+                return 0
+              fi
+
+              deactivate || true
+              rm -rf "$venv_path"
+              if [ "$attempt" -eq 6 ]; then
+                echo "Unable to install $requirement from the release index" >&2
+                return 1
+              fi
+              sleep 15
+            done
+          }
+
+          verify_install "${PACKAGE_NAME}==${PACKAGE_VERSION}" /tmp/testpypi-base
+          case "$TARGET" in
+            middleware|client)
+              verify_install "${PACKAGE_NAME}[x402]==${PACKAGE_VERSION}" /tmp/testpypi-extra
+              ;;
+          esac
+
   publish-pypi:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     needs: [resolve, build]
@@ -139,3 +302,77 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  verify-pypi-install:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: [resolve, publish-pypi]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify clean install from PyPI
+        env:
+          TARGET: ${{ needs.resolve.outputs.target }}
+          PACKAGE_NAME: ${{ needs.resolve.outputs.package_name }}
+          PACKAGE_VERSION: ${{ needs.resolve.outputs.package_version }}
+          INDEX_URL: ${{ needs.resolve.outputs.index_url }}
+        run: |
+          verify_install() {
+            requirement="$1"
+            venv_path="$2"
+
+            for attempt in 1 2 3 4 5 6; do
+              rm -rf "$venv_path"
+              python -m venv "$venv_path"
+              . "$venv_path/bin/activate"
+              python -m pip install --upgrade pip
+
+              if python -m pip install --index-url "$INDEX_URL" "$requirement"; then
+                case "$TARGET" in
+                  core)
+                    python -c "import xrpl_x402_core as package; assert package.XRP_CODE == 'XRP'"
+                    ;;
+                  facilitator)
+                    python -c "from xrpl_x402_facilitator import create_app; assert callable(create_app)"
+                    xrpl-x402-facilitator --help >/dev/null
+                    ;;
+                  middleware)
+                    if [ "$requirement" = "${PACKAGE_NAME}[x402]==${PACKAGE_VERSION}" ]; then
+                      python -c "from xrpl_x402_middleware.adapters.x402 import register_exact_xrpl_server; assert callable(register_exact_xrpl_server)"
+                    else
+                      python -c "from xrpl_x402_middleware import PaymentMiddlewareASGI; assert PaymentMiddlewareASGI"
+                    fi
+                    ;;
+                  client)
+                    if [ "$requirement" = "${PACKAGE_NAME}[x402]==${PACKAGE_VERSION}" ]; then
+                      python -c "from xrpl_x402_client.adapters.x402 import register_exact_xrpl_client; assert callable(register_exact_xrpl_client)"
+                    else
+                      python -c "from xrpl_x402_client import XRPLPaymentSigner; assert XRPLPaymentSigner"
+                    fi
+                    ;;
+                esac
+                deactivate
+                rm -rf "$venv_path"
+                return 0
+              fi
+
+              deactivate || true
+              rm -rf "$venv_path"
+              if [ "$attempt" -eq 6 ]; then
+                echo "Unable to install $requirement from PyPI" >&2
+                return 1
+              fi
+              sleep 15
+            done
+          }
+
+          verify_install "${PACKAGE_NAME}==${PACKAGE_VERSION}" /tmp/pypi-base
+          case "$TARGET" in
+            middleware|client)
+              verify_install "${PACKAGE_NAME}[x402]==${PACKAGE_VERSION}" /tmp/pypi-extra
+              ;;
+          esac
