@@ -47,7 +47,10 @@ GitHub environments used by the workflow:
 
 ## Version Prep
 
-Keep the first public release at `0.1.0` for all five packages.
+Current release line:
+
+- `0.1.0` for `xrpl-x402-core`, `xrpl-x402-facilitator`, and `xrpl-x402-middleware`
+- `0.1.1` for `xrpl-x402-client` and `xrpl-x402-payer`
 
 Before publishing:
 
@@ -116,8 +119,8 @@ pip install --upgrade pip
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ xrpl-x402-core==0.1.0
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ xrpl-x402-facilitator==0.1.0
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "xrpl-x402-middleware[x402]==0.1.0"
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "xrpl-x402-client[x402]==0.1.0"
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "xrpl-x402-payer[mcp]==0.1.0"
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "xrpl-x402-client[x402]==0.1.1"
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "xrpl-x402-payer[mcp]==0.1.1"
 ```
 
 ## Production Publish
@@ -138,11 +141,11 @@ git push origin facilitator-v0.1.0
 git tag middleware-v0.1.0
 git push origin middleware-v0.1.0
 
-git tag client-v0.1.0
-git push origin client-v0.1.0
+git tag client-v0.1.1
+git push origin client-v0.1.1
 
-git tag payer-v0.1.0
-git push origin payer-v0.1.0
+git tag payer-v0.1.1
+git push origin payer-v0.1.1
 ```
 
 The publish workflow fails if the tag version and the package `version` field do not match.
@@ -164,6 +167,6 @@ pip install --upgrade pip
 pip install xrpl-x402-core==0.1.0
 pip install xrpl-x402-facilitator==0.1.0
 pip install "xrpl-x402-middleware[x402]==0.1.0"
-pip install "xrpl-x402-client[x402]==0.1.0"
-pip install "xrpl-x402-payer[mcp]==0.1.0"
+pip install "xrpl-x402-client[x402]==0.1.1"
+pip install "xrpl-x402-payer[mcp]==0.1.1"
 ```
