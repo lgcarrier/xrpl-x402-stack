@@ -2,6 +2,15 @@
 
 All notable changes to the Open XRPL x402 Stack are documented here.
 
+## xrpl-x402-core 0.1.1
+
+- Added the shared XRPL Testnet RPC resolver used by quickstart tooling and other Testnet-aware flows to find a healthy public JSON-RPC endpoint.
+
+## xrpl-x402-payer 0.1.2
+
+- Added automatic public XRPL Testnet RPC selection when `XRPL_RPC_URL` is unset and `XRPL_NETWORK=xrpl:1`.
+- Raised the `xrpl-x402-core` dependency floor to `0.1.1` so clean installs include the shared Testnet RPC resolver.
+
 ## xrpl-x402-core 0.1.0
 
 - Initial public release of the shared XRPL/x402 wire models, header codecs, asset helpers, and exact-payment matching utilities.

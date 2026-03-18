@@ -23,7 +23,6 @@ from devtools.live_testnet_support import (
     DEFAULT_USDC_TESTNET_ISSUER,
     LIVE_TEST_FLAG,
     RLUSD_TESTNET_ISSUER_ENV,
-    TESTNET_RPC_URL,
     USDC_TESTNET_ISSUER_ENV,
     LiveWalletPair,
     consolidate_rlusd_to_wallet_a,
@@ -36,6 +35,7 @@ from devtools.live_testnet_support import (
     get_validated_usdc_trustline_balance,
     recover_tracked_claim_wallets,
     recover_tracked_usdc_claim_wallets,
+    resolve_live_testnet_rpc_url,
     wallet_cache_path,
 )
 from tests.fakes import FakeRedis
@@ -67,7 +67,8 @@ def _build_live_test_client(app_settings: Settings) -> TestClient:
     reason=f"Set {LIVE_TEST_FLAG}=1 to run the XRPL Testnet live integration test.",
 )
 def test_live_xrp_payment_round_trip() -> None:
-    client = JsonRpcClient(TESTNET_RPC_URL)
+    rpc_url = resolve_live_testnet_rpc_url()
+    client = JsonRpcClient(rpc_url)
     wallets = get_live_wallet_pair(client)
     sender, receiver = _select_xrp_wallets(
         client,
@@ -77,7 +78,7 @@ def test_live_xrp_payment_round_trip() -> None:
 
     app_settings = Settings(
         _env_file=None,
-        XRPL_RPC_URL=TESTNET_RPC_URL,
+        XRPL_RPC_URL=rpc_url,
         MY_DESTINATION_ADDRESS=receiver.classic_address,
         REDIS_URL="redis://fake:6379/0",
         NETWORK_ID="xrpl:1",
@@ -134,7 +135,8 @@ def test_live_xrp_payment_round_trip() -> None:
     reason=f"Set {LIVE_TEST_FLAG}=1 to run the XRPL Testnet live integration test.",
 )
 def test_live_rlusd_payment_round_trip() -> None:
-    client = JsonRpcClient(TESTNET_RPC_URL)
+    rpc_url = resolve_live_testnet_rpc_url()
+    client = JsonRpcClient(rpc_url)
     issuer = os.environ.get(RLUSD_TESTNET_ISSUER_ENV, DEFAULT_RLUSD_TESTNET_ISSUER)
     wallets = get_live_wallet_pair(client)
     recover_tracked_claim_wallets(client, wallets.wallet_a, issuer)
@@ -150,7 +152,7 @@ def test_live_rlusd_payment_round_trip() -> None:
 
     app_settings = Settings(
         _env_file=None,
-        XRPL_RPC_URL=TESTNET_RPC_URL,
+        XRPL_RPC_URL=rpc_url,
         MY_DESTINATION_ADDRESS=receiver.classic_address,
         REDIS_URL="redis://fake:6379/0",
         NETWORK_ID="xrpl:1",
@@ -231,7 +233,8 @@ def test_live_rlusd_payment_round_trip() -> None:
     reason=f"Set {LIVE_TEST_FLAG}=1 to run the XRPL Testnet live integration test.",
 )
 def test_live_usdc_payment_round_trip() -> None:
-    client = JsonRpcClient(TESTNET_RPC_URL)
+    rpc_url = resolve_live_testnet_rpc_url()
+    client = JsonRpcClient(rpc_url)
     issuer = os.environ.get(USDC_TESTNET_ISSUER_ENV, DEFAULT_USDC_TESTNET_ISSUER)
     wallets = get_live_wallet_pair(client)
     recover_tracked_usdc_claim_wallets(client, wallets.wallet_a, issuer)
@@ -248,7 +251,7 @@ def test_live_usdc_payment_round_trip() -> None:
     allowed_issued_assets = "" if issuer == USDC_TESTNET_ISSUER else f"USDC:{issuer}"
     app_settings = Settings(
         _env_file=None,
-        XRPL_RPC_URL=TESTNET_RPC_URL,
+        XRPL_RPC_URL=rpc_url,
         MY_DESTINATION_ADDRESS=receiver.classic_address,
         REDIS_URL="redis://fake:6379/0",
         NETWORK_ID="xrpl:1",

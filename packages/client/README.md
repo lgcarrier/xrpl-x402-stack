@@ -58,6 +58,9 @@ asyncio.run(fetch_paid_resource())
 - Optional adapter extra pins `x402==2.3.0`
 - Examples target `xrpl:1`; mainnet usage uses `xrpl:0`
 
+When you run the repo buyer example on `xrpl:1`, leave `XRPL_RPC_URL` unset to auto-select a healthy
+public Testnet RPC, or set it explicitly to pin a provider.
+
 ## Provenance
 
 The implementation is independently developed for the open `x402` protocol and does not copy `x402-xrpl`.

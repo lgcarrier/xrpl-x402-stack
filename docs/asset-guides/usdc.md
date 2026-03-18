@@ -43,7 +43,7 @@ Then restart the stack and rerun the buyer:
 
 ```bash
 docker compose --env-file .env.quickstart up --build
-docker compose --env-file .env.quickstart run --rm --profile demo buyer
+docker compose --env-file .env.quickstart --profile demo run --rm buyer
 ```
 
 ## Notes

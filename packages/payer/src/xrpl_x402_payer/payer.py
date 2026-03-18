@@ -28,6 +28,7 @@ from xrpl_x402_core import (
     decode_model_from_base64,
     normalize_currency_code,
 )
+from xrpl_x402_core.testnet_rpc import resolve_testnet_rpc_url
 
 from xrpl_x402_payer.receipts import ReceiptRecord, ReceiptStore
 
@@ -194,6 +195,21 @@ async def pay_with_x402(**kwargs: Any) -> PayResult:
     return await payer.pay(**kwargs)
 
 
+def resolve_signer_rpc_url(
+    *,
+    rpc_url: str | None = None,
+    network: str,
+) -> str:
+    resolved_rpc_url = (rpc_url or os.getenv("XRPL_RPC_URL", "")).strip()
+    if resolved_rpc_url:
+        return resolved_rpc_url
+
+    if network == DEFAULT_NETWORK:
+        return resolve_testnet_rpc_url()
+
+    return DEFAULT_RPC_URL
+
+
 def build_signer_from_env(
     *,
     rpc_url: str | None = None,
@@ -205,7 +221,10 @@ def build_signer_from_env(
 
     wallet = Wallet.from_seed(wallet_seed)
     resolved_network = network or os.getenv("XRPL_NETWORK") or os.getenv("NETWORK_ID") or DEFAULT_NETWORK
-    resolved_rpc_url = rpc_url or os.getenv("XRPL_RPC_URL") or DEFAULT_RPC_URL
+    resolved_rpc_url = resolve_signer_rpc_url(
+        rpc_url=rpc_url,
+        network=resolved_network,
+    )
     return XRPLPaymentSigner(wallet, rpc_url=resolved_rpc_url, network=resolved_network)
 
 

@@ -19,7 +19,13 @@ from xrpl_x402_payer.mcp import budget_status as mcp_budget_status
 from xrpl_x402_payer.mcp import list_receipts as mcp_list_receipts
 from xrpl_x402_payer.mcp import pay_url as mcp_pay_url
 from xrpl_x402_payer.mcp import proxy_mode as mcp_proxy_mode
-from xrpl_x402_payer.payer import PayResult, XRPLPayer, budget_status
+from xrpl_x402_payer.payer import (
+    DEFAULT_RPC_URL,
+    PayResult,
+    XRPLPayer,
+    budget_status,
+    build_signer_from_env,
+)
 from xrpl_x402_payer.receipts import ReceiptStore
 
 DESTINATION = "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe"
@@ -136,6 +142,94 @@ def test_pay_raises_on_plain_402_without_challenge(tmp_path) -> None:
                 transport=httpx.MockTransport(handler),
             )
         )
+
+
+def test_build_signer_from_env_resolves_testnet_rpc_when_unset(monkeypatch) -> None:
+    wallet = Wallet.create()
+    assert wallet.seed is not None
+
+    captured: dict[str, object] = {}
+
+    class FakeSigner:
+        def __init__(self, wallet_arg, *, rpc_url: str, network: str) -> None:
+            captured["wallet"] = wallet_arg
+            captured["rpc_url"] = rpc_url
+            captured["network"] = network
+
+    monkeypatch.setenv("XRPL_WALLET_SEED", wallet.seed)
+    monkeypatch.setenv("XRPL_NETWORK", "xrpl:1")
+    monkeypatch.delenv("XRPL_RPC_URL", raising=False)
+    monkeypatch.setattr("xrpl_x402_payer.payer.XRPLPaymentSigner", FakeSigner)
+    monkeypatch.setattr(
+        "xrpl_x402_payer.payer.resolve_testnet_rpc_url",
+        lambda: "https://resolved.testnet.rpc/",
+    )
+
+    build_signer_from_env()
+
+    assert captured["wallet"].classic_address == wallet.classic_address
+    assert captured["rpc_url"] == "https://resolved.testnet.rpc/"
+    assert captured["network"] == "xrpl:1"
+
+
+def test_build_signer_from_env_prefers_explicit_runtime_rpc_url(monkeypatch) -> None:
+    wallet = Wallet.create()
+    assert wallet.seed is not None
+
+    captured: dict[str, object] = {}
+    resolver_called = {"value": False}
+
+    class FakeSigner:
+        def __init__(self, wallet_arg, *, rpc_url: str, network: str) -> None:
+            captured["wallet"] = wallet_arg
+            captured["rpc_url"] = rpc_url
+            captured["network"] = network
+
+    monkeypatch.setenv("XRPL_WALLET_SEED", wallet.seed)
+    monkeypatch.setenv("XRPL_NETWORK", "xrpl:1")
+    monkeypatch.setenv("XRPL_RPC_URL", "https://explicit.testnet.rpc/")
+    monkeypatch.setattr("xrpl_x402_payer.payer.XRPLPaymentSigner", FakeSigner)
+    monkeypatch.setattr(
+        "xrpl_x402_payer.payer.resolve_testnet_rpc_url",
+        lambda: resolver_called.__setitem__("value", True) or "https://resolved.testnet.rpc/",
+    )
+
+    build_signer_from_env()
+
+    assert captured["wallet"].classic_address == wallet.classic_address
+    assert captured["rpc_url"] == "https://explicit.testnet.rpc/"
+    assert captured["network"] == "xrpl:1"
+    assert resolver_called["value"] is False
+
+
+def test_build_signer_from_env_does_not_auto_resolve_non_testnet_network(monkeypatch) -> None:
+    wallet = Wallet.create()
+    assert wallet.seed is not None
+
+    captured: dict[str, object] = {}
+    resolver_called = {"value": False}
+
+    class FakeSigner:
+        def __init__(self, wallet_arg, *, rpc_url: str, network: str) -> None:
+            captured["wallet"] = wallet_arg
+            captured["rpc_url"] = rpc_url
+            captured["network"] = network
+
+    monkeypatch.setenv("XRPL_WALLET_SEED", wallet.seed)
+    monkeypatch.setenv("XRPL_NETWORK", "xrpl:0")
+    monkeypatch.delenv("XRPL_RPC_URL", raising=False)
+    monkeypatch.setattr("xrpl_x402_payer.payer.XRPLPaymentSigner", FakeSigner)
+    monkeypatch.setattr(
+        "xrpl_x402_payer.payer.resolve_testnet_rpc_url",
+        lambda: resolver_called.__setitem__("value", True) or "https://resolved.testnet.rpc/",
+    )
+
+    build_signer_from_env()
+
+    assert captured["wallet"].classic_address == wallet.classic_address
+    assert captured["rpc_url"] == DEFAULT_RPC_URL
+    assert captured["network"] == "xrpl:0"
+    assert resolver_called["value"] is False
 
 
 def test_budget_status_sums_matching_asset(monkeypatch, tmp_path) -> None:

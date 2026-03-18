@@ -36,10 +36,12 @@ Point the buyer at a funded Testnet wallet and a protected route:
 
 ```bash
 export XRPL_WALLET_SEED=sEd...
-export XRPL_RPC_URL=https://s.altnet.rippletest.net:51234
 export XRPL_NETWORK=xrpl:1
 export TARGET_URL=http://127.0.0.1:8010/premium
 ```
+
+If `XRPL_RPC_URL` is unset and `XRPL_NETWORK=xrpl:1`, the repo buyer example auto-selects a healthy
+public XRPL Testnet RPC. Set `XRPL_RPC_URL` explicitly if you want to pin a specific provider.
 
 Run the repo example:
 

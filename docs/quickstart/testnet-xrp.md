@@ -29,10 +29,14 @@ Generate the quickstart env file:
 python -m devtools.quickstart
 ```
 
+If you need to pin the Testnet RPC used during wallet generation, either export
+`XRPL_TESTNET_RPC_URL` first or pass `--xrpl-rpc-url https://your-testnet-rpc.example/`.
+
 That command:
 
 - creates or reuses a cached XRPL Testnet wallet pair
 - writes `.env.quickstart`
+- auto-selects a healthy public XRPL Testnet RPC and writes it into `.env.quickstart` as `XRPL_RPC_URL`
 - prints the merchant address, buyer address, buyer seed, and the exact next commands
 
 The generated file contains secrets and is ignored by git. Do not commit it.
@@ -48,7 +52,7 @@ docker compose --env-file .env.quickstart up --build
 In a second terminal, trigger the paid request:
 
 ```bash
-docker compose --env-file .env.quickstart run --rm --profile demo buyer
+docker compose --env-file .env.quickstart --profile demo run --rm buyer
 ```
 
 Expected output:

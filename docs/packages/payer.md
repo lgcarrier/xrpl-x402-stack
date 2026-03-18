@@ -43,10 +43,13 @@ claude mcp add xrpl-x402-payer -- xrpl-x402 mcp
 ## Environment
 
 - `XRPL_WALLET_SEED`: wallet seed used for signing payments
-- `XRPL_RPC_URL`: RPC endpoint for signing and autofill
+- `XRPL_RPC_URL`: RPC endpoint for signing and autofill; when unset and `XRPL_NETWORK=xrpl:1`, the payer auto-selects a healthy public Testnet RPC
 - `XRPL_NETWORK`: network id such as `xrpl:1`
 - `XRPL_X402_MAX_SPEND`: optional default spend cap for local budget tracking
 - `XRPL_X402_RECEIPTS_PATH`: optional receipt store override
+
+Set `XRPL_RPC_URL` explicitly if you want to pin the payer to one provider instead of using automatic
+Testnet selection.
 
 ## Public API
 

@@ -8,24 +8,30 @@ from xrpl.clients import JsonRpcClient
 
 from devtools.live_testnet_support import (
     TRYRLUSD_SESSION_TOKEN_ENV,
-    TESTNET_RPC_URL,
     claim_rlusd_topup,
     default_rlusd_issuer,
     get_live_wallet_pair,
+    resolve_live_testnet_rpc_url,
 )
 
 
 def build_parser() -> argparse.ArgumentParser:
-    return argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         description="Top up the cached XRPL Testnet RLUSD wallet when the local cooldown allows it.",
     )
+    parser.add_argument(
+        "--xrpl-rpc-url",
+        default=None,
+        help="Optional XRPL Testnet JSON-RPC endpoint override",
+    )
+    return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    build_parser().parse_args(argv)
+    args = build_parser().parse_args(argv)
 
     try:
-        client = JsonRpcClient(TESTNET_RPC_URL)
+        client = JsonRpcClient(resolve_live_testnet_rpc_url(args.xrpl_rpc_url))
         wallets = get_live_wallet_pair(client)
         issuer = default_rlusd_issuer()
         result = claim_rlusd_topup(

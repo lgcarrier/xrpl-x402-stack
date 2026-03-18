@@ -20,10 +20,14 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt
 python -m devtools.quickstart
 docker compose --env-file .env.quickstart up --build
-docker compose --env-file .env.quickstart run --rm --profile demo buyer
+docker compose --env-file .env.quickstart --profile demo run --rm buyer
 ```
 
-That flow runs a real XRP payment on XRPL Testnet. The hosted docs also include follow-on RLUSD and USDC guides.
+That flow runs a real XRP payment on XRPL Testnet. `devtools.quickstart` auto-selects a
+healthy public Testnet RPC and writes it to `.env.quickstart` as `XRPL_RPC_URL`.
+Override the quickstart-side selection with `XRPL_TESTNET_RPC_URL` or
+`python -m devtools.quickstart --xrpl-rpc-url ...`.
+The hosted docs also include follow-on RLUSD and USDC guides.
 
 ## Full AI Agent Support
 

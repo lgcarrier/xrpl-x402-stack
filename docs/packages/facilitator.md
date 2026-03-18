@@ -31,11 +31,13 @@ export MY_DESTINATION_ADDRESS=rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe
 export FACILITATOR_BEARER_TOKEN=replace-with-your-token
 export REDIS_URL=redis://127.0.0.1:6379/0
 export NETWORK_ID=xrpl:1
-export XRPL_RPC_URL=https://s.altnet.rippletest.net:51234
+export XRPL_RPC_URL=https://your-testnet-rpc.example/
 xrpl-x402-facilitator --host 127.0.0.1 --port 8000
 ```
 
 Redis is required in every mode because the facilitator uses it for replay protection and rate limiting.
+For local demos, `python -m devtools.quickstart` writes a resolved Testnet `XRPL_RPC_URL` into
+`.env.quickstart` for you.
 
 ## Operating Modes
 

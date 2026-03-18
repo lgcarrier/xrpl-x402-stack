@@ -4,6 +4,22 @@
 
 Run `python -m devtools.quickstart` first, or make sure `.env.quickstart` includes `XRPL_WALLET_SEED`.
 
+## Quickstart cannot find a healthy public XRPL Testnet RPC endpoint
+
+The quickstart and top-up helpers probe a small list of public Testnet JSON-RPC servers by default.
+If all of them are unavailable from your machine, pin one explicitly:
+
+```bash
+export XRPL_TESTNET_RPC_URL=https://your-testnet-rpc.example/
+python -m devtools.quickstart
+```
+
+You can also pass `--xrpl-rpc-url ...` to `devtools.quickstart`, `devtools.rlusd_topup`, or
+`devtools.usdc_topup`.
+
+For the generated runtime stack, keep using `XRPL_RPC_URL` in `.env.quickstart` or your shell if
+you want to pin the buyer, payer, or facilitator to a specific RPC provider.
+
 ## Docker Compose starts, but the buyer still gets `402`
 
 - confirm the facilitator and merchant are using the same `FACILITATOR_BEARER_TOKEN`

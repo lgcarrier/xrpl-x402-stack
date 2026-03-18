@@ -42,7 +42,7 @@ Cursor can use the same command as a local MCP server.
 ## Environment
 
 - `XRPL_WALLET_SEED`: wallet seed used for signing payments
-- `XRPL_RPC_URL`: defaults to XRPL Testnet RPC
+- `XRPL_RPC_URL`: optional explicit RPC endpoint; when unset and `XRPL_NETWORK=xrpl:1`, the payer auto-selects a healthy public Testnet RPC
 - `XRPL_NETWORK`: defaults to `xrpl:1`
 - `XRPL_X402_RECEIPTS_PATH`: optional override for local receipt storage
 - `XRPL_X402_MAX_SPEND`: optional default spend cap used by `budget_status`

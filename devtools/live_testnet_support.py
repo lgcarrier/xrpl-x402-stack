@@ -25,10 +25,11 @@ from xrpl_x402_core import (
     USDC_TESTNET_ISSUER,
     normalize_currency_code,
 )
+from xrpl_x402_core.testnet_rpc import resolve_testnet_rpc_url
 
-TESTNET_RPC_URL = "https://s.altnet.rippletest.net:51234/"
 LIVE_TEST_FLAG = "RUN_XRPL_TESTNET_LIVE"
 TRYRLUSD_SESSION_TOKEN_ENV = "TRYRLUSD_SESSION_TOKEN"
+XRPL_TESTNET_RPC_URL_ENV = "XRPL_TESTNET_RPC_URL"
 RLUSD_TESTNET_ISSUER_ENV = "XRPL_TESTNET_RLUSD_ISSUER"
 USDC_TESTNET_ISSUER_ENV = "XRPL_TESTNET_USDC_ISSUER"
 WALLET_CACHE_PATH_ENV = "XRPL_TESTNET_WALLET_CACHE_PATH"
@@ -176,6 +177,12 @@ def default_rlusd_issuer() -> str:
 
 def default_usdc_issuer() -> str:
     return os.environ.get(USDC_TESTNET_ISSUER_ENV, DEFAULT_USDC_TESTNET_ISSUER)
+
+
+def resolve_live_testnet_rpc_url(explicit_rpc_url: str | None = None) -> str:
+    return resolve_testnet_rpc_url(
+        explicit_url=explicit_rpc_url or os.environ.get(XRPL_TESTNET_RPC_URL_ENV)
+    )
 
 
 def wallet_cache_path() -> Path:

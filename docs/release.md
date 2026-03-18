@@ -116,11 +116,11 @@ TestPyPI installs should use PyPI as an extra index for shared dependencies:
 python3.12 -m venv /tmp/x402-testpypi
 source /tmp/x402-testpypi/bin/activate
 pip install --upgrade pip
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ xrpl-x402-core==0.1.0
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ xrpl-x402-core==0.1.1
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ xrpl-x402-facilitator==0.1.0
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "xrpl-x402-middleware[x402]==0.1.0"
 pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "xrpl-x402-client[x402]==0.1.1"
-pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "xrpl-x402-payer[mcp]==0.1.1"
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "xrpl-x402-payer[mcp]==0.1.2"
 ```
 
 ## Production Publish
@@ -128,8 +128,8 @@ pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://
 After TestPyPI succeeds, publish in this order:
 
 ```bash
-git tag core-v0.1.0
-git push origin core-v0.1.0
+git tag core-v0.1.1
+git push origin core-v0.1.1
 ```
 
 Wait for index availability, then publish the remaining packages:
@@ -144,8 +144,8 @@ git push origin middleware-v0.1.0
 git tag client-v0.1.1
 git push origin client-v0.1.1
 
-git tag payer-v0.1.1
-git push origin payer-v0.1.1
+git tag payer-v0.1.2
+git push origin payer-v0.1.2
 ```
 
 The publish workflow fails if the tag version and the package `version` field do not match.

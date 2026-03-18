@@ -19,7 +19,11 @@ That flow uses:
 
 - `python -m devtools.quickstart` to generate reusable Testnet wallets and `.env.quickstart`
 - `docker compose --env-file .env.quickstart up --build` to run the facilitator and merchant
-- `docker compose --env-file .env.quickstart run --rm --profile demo buyer` to trigger the paid request
+- `docker compose --env-file .env.quickstart --profile demo run --rm buyer` to trigger the paid request
+
+The quickstart probes public XRPL Testnet RPC servers and writes the first healthy endpoint into
+`.env.quickstart` as `XRPL_RPC_URL`. Override the devtools-side selection with
+`XRPL_TESTNET_RPC_URL` or `python -m devtools.quickstart --xrpl-rpc-url ...`.
 
 ## Package Chooser
 
@@ -92,7 +96,7 @@ Then restart the stack and rerun the buyer:
 
 ```bash
 docker compose --env-file .env.quickstart up --build
-docker compose --env-file .env.quickstart run --rm --profile demo buyer
+docker compose --env-file .env.quickstart --profile demo run --rm buyer
 ```
 
 Use the [RLUSD guide](asset-guides/rlusd.md) for faucet setup, trustline details, and sweep behavior.
@@ -112,7 +116,7 @@ Then restart the stack and rerun the buyer:
 
 ```bash
 docker compose --env-file .env.quickstart up --build
-docker compose --env-file .env.quickstart run --rm --profile demo buyer
+docker compose --env-file .env.quickstart --profile demo run --rm buyer
 ```
 
 Use the [USDC guide](asset-guides/usdc.md) for the Circle faucet flow and sweep behavior.

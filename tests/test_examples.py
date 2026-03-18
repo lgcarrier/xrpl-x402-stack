@@ -125,10 +125,12 @@ def test_buyer_example_passes_env_asset_selection(monkeypatch) -> None:
         *,
         asset=None,
         transport=None,
+        timeout=None,
         **_kwargs,
     ):
         captured["asset"] = asset
         captured["transport"] = transport
+        captured["timeout"] = timeout
         return DummyClient()
 
     monkeypatch.setenv("PAYMENT_ASSET", "RLUSD:rRLUSDISSUER")
@@ -147,6 +149,38 @@ def test_buyer_example_passes_env_asset_selection(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert captured["asset"] == "RLUSD:rRLUSDISSUER"
+    assert captured["timeout"] == buyer_example.DEFAULT_REQUEST_TIMEOUT_SECONDS
+
+
+def test_buyer_example_resolves_testnet_rpc_when_unset(monkeypatch) -> None:
+    buyer_example = importlib.import_module("examples.buyer_httpx")
+    buyer_example = importlib.reload(buyer_example)
+
+    monkeypatch.delenv("XRPL_RPC_URL", raising=False)
+    monkeypatch.setenv("XRPL_NETWORK", "xrpl:1")
+    monkeypatch.setattr(
+        buyer_example,
+        "resolve_testnet_rpc_url",
+        lambda: "https://resolved.testnet.rpc/",
+    )
+
+    assert buyer_example.rpc_url_from_env() == "https://resolved.testnet.rpc/"
+
+
+def test_buyer_example_prefers_explicit_rpc_url(monkeypatch) -> None:
+    buyer_example = importlib.import_module("examples.buyer_httpx")
+    buyer_example = importlib.reload(buyer_example)
+    resolver_called = {"value": False}
+
+    monkeypatch.setenv("XRPL_RPC_URL", "https://explicit.testnet.rpc/")
+    monkeypatch.setattr(
+        buyer_example,
+        "resolve_testnet_rpc_url",
+        lambda: resolver_called.__setitem__("value", True) or "https://resolved.testnet.rpc/",
+    )
+
+    assert buyer_example.rpc_url_from_env() == "https://explicit.testnet.rpc/"
+    assert resolver_called["value"] is False
 
 
 def test_example_quickstart_flow_returns_paid_response(monkeypatch) -> None:
