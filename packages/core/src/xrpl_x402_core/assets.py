@@ -55,6 +55,22 @@ def normalize_currency_code(currency: str) -> str:
     return normalized
 
 
+def xrpl_currency_code(code: str) -> str:
+    raw_code = str(code).strip()
+    if not raw_code:
+        raise ValueError("Asset code is required")
+
+    if len(raw_code) == 40 and set(raw_code) <= _HEX_DIGITS:
+        return raw_code.upper()
+
+    normalized = normalize_currency_code(raw_code)
+    if len(normalized) == 3:
+        return normalized
+    if len(normalized) > 20:
+        raise ValueError("Issued currency codes must be 20 ASCII bytes or fewer")
+    return normalized.encode("ascii").hex().upper().ljust(40, "0")
+
+
 def parse_allowed_issued_assets(raw_assets: str) -> list[AssetKey]:
     parsed_assets: list[AssetKey] = []
     seen_assets: set[AssetKey] = set()

@@ -5,7 +5,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${FACILITATOR_PORT:-8000}:8000"
     environment:
       GATEWAY_AUTH_MODE: ${GATEWAY_AUTH_MODE:-single_token}
       XRPL_RPC_URL: ${XRPL_RPC_URL:-https://s.altnet.rippletest.net:51234}
@@ -14,6 +14,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       NETWORK_ID: ${NETWORK_ID:-xrpl:1}
       SETTLEMENT_MODE: ${SETTLEMENT_MODE:-validated}
+      ALLOWED_ISSUED_ASSETS: ${ALLOWED_ISSUED_ASSETS:-}
       ENABLE_API_DOCS: ${ENABLE_API_DOCS:-false}
     restart: unless-stopped
   merchant:
@@ -22,7 +23,7 @@ services:
       facilitator:
         condition: service_started
     ports:
-      - "127.0.0.1:8010:8010"
+      - "127.0.0.1:${MERCHANT_PORT:-8010}:8010"
     command: ["uvicorn", "examples.merchant_fastapi.app:app", "--host", "0.0.0.0", "--port", "8010"]
     environment:
       FACILITATOR_URL: http://facilitator:8000
@@ -40,7 +41,7 @@ services:
     depends_on:
       merchant:
         condition: service_started
-    command: ["python", "examples/buyer_httpx.py"]
+    command: ["python", "-m", "devtools.demo_trace"]
     environment:
       TARGET_URL: http://merchant:8010/premium
       XRPL_RPC_URL: ${XRPL_RPC_URL:-https://s.altnet.rippletest.net:51234}

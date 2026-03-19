@@ -321,6 +321,37 @@ def test_mismatched_verified_payment_returns_fresh_challenge(
     assert len(client.settle_calls) == 0
 
 
+def test_issued_asset_amount_match_tolerates_equivalent_decimal_formatting() -> None:
+    route_config = require_payment(
+        facilitator_url=FACILITATOR_URL,
+        bearer_token=FACILITATOR_TOKEN,
+        pay_to=DESTINATION,
+        network="xrpl:1",
+        amount="2.50",
+        asset_code="USDC",
+        asset_issuer="rUSDCISSUER",
+    )
+    client = FakeFacilitatorClient(
+        supported=build_supported(XRPLAsset(code="USDC", issuer="rUSDCISSUER")),
+        verify_response=build_verify_response(
+            asset=XRPLAsset(code="USDC", issuer="rUSDCISSUER"),
+            amount=XRPLAmount(value="2.5", unit="issued"),
+        ),
+        settle_response=build_settle_response(),
+    )
+    app = build_app(make_client_factory(client), route_config=route_config)
+    payment_payload = PaymentPayload(
+        network="xrpl:1",
+        payload={"signedTxBlob": "signed-blob"},
+    )
+
+    with TestClient(app) as test_client:
+        response = test_client.get("/paid", headers=build_payload_header(payment_payload))
+
+    assert response.status_code == 200
+    assert len(client.settle_calls) == 1
+
+
 def test_verification_failures_are_normalized_to_payment_required() -> None:
     client = FakeFacilitatorClient(
         supported=build_supported(XRPLAsset(code="XRP", issuer=None)),

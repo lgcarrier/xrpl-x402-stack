@@ -88,6 +88,11 @@ def render_quickstart_env(
     return "\n".join(lines)
 
 
+def mask_secret(value: str, *, visible_prefix: int) -> str:
+    visible = value[:visible_prefix]
+    return f"{visible}{'*' * max(len(value) - len(visible), 0)}"
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
@@ -118,9 +123,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"Wrote {output_path}")
     print(f"Merchant address: {merchant_wallet.classic_address}")
     print(f"Buyer address: {buyer_wallet.classic_address}")
-    print(f"Buyer seed: {buyer_seed}")
+    print(f"Buyer seed: {mask_secret(buyer_seed, visible_prefix=3)}")
     print(f"XRPL RPC URL: {xrpl_rpc_url}")
-    print(f"Facilitator bearer token: {facilitator_token}")
+    print(
+        "Facilitator bearer token: "
+        f"{mask_secret(facilitator_token, visible_prefix=2)}"
+    )
     print(f"Wallet cache: {wallet_cache_path()}")
     print("Next steps:")
     print(f"  docker compose --env-file {output_path} up --build")

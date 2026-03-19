@@ -12,12 +12,15 @@ from xrpl_x402_client import (
     XRPLPaymentSigner,
     build_payment_signature,
     decode_payment_required,
+    decode_payment_required_response,
     select_payment_option,
     wrap_httpx_with_xrpl_payment,
 )
 from xrpl_x402_core import (
     PaymentPayload,
     PaymentRequired,
+    RLUSD_HEX,
+    RLUSD_TESTNET_ISSUER,
     XRPLPaymentOption,
     decode_model_from_base64,
     encode_model_to_base64,
@@ -52,6 +55,17 @@ def test_decode_payment_required_round_trips_header() -> None:
     challenge = _payment_required()
 
     decoded = decode_payment_required(encode_model_to_base64(challenge))
+
+    assert decoded == challenge
+
+
+def test_decode_payment_required_response_accepts_lowercase_header_name() -> None:
+    challenge = _payment_required()
+
+    decoded = decode_payment_required_response(
+        headers={PAYMENT_REQUIRED_HEADER.lower(): encode_model_to_base64(challenge)},
+        body=None,
+    )
 
     assert decoded == challenge
 
@@ -121,3 +135,30 @@ def test_httpx_transport_retries_once_after_402() -> None:
     assert captured_signature is not None
     retried_payload = decode_model_from_base64(captured_signature, PaymentPayload)
     assert retried_payload.network == "xrpl:1"
+
+
+def test_build_payment_signature_signs_offline_exact_rlusd_payment_with_hex_currency() -> None:
+    signer = XRPLPaymentSigner(
+        Wallet.create(),
+        network="xrpl:1",
+        autofill_enabled=False,
+    )
+    option = XRPLPaymentOption(
+        network="xrpl:1",
+        payTo=DESTINATION,
+        maxAmountRequired="1.25",
+        asset={"code": "RLUSD", "issuer": RLUSD_TESTNET_ISSUER},
+        amount={"value": "1.25", "unit": "issued"},
+    )
+
+    payment_signature = build_payment_signature(option, signer)
+    payload = decode_model_from_base64(payment_signature, PaymentPayload)
+    tx = binarycodec.decode(payload.payload.signed_tx_blob)
+
+    assert tx["Destination"] == DESTINATION
+    assert tx["Account"] == signer.wallet.classic_address
+    assert tx["Amount"] == {
+        "currency": RLUSD_HEX,
+        "issuer": RLUSD_TESTNET_ISSUER,
+        "value": "1.25",
+    }

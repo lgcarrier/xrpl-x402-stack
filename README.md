@@ -12,7 +12,9 @@ Hosted docs: <https://lgcarrier.github.io/xrpl-x402-stack/>
 - `xrpl-x402-client`: buyer-side payment signing and `402` retry support
 - `xrpl-x402-payer`: buyer CLI, proxy, receipts, and MCP server
 
-## Fastest Real Demo
+## Fastest Real Demos
+
+### XRP
 
 ```bash
 python3.12 -m venv .venv
@@ -27,7 +29,46 @@ That flow runs a real XRP payment on XRPL Testnet. `devtools.quickstart` auto-se
 healthy public Testnet RPC and writes it to `.env.quickstart` as `XRPL_RPC_URL`.
 Override the quickstart-side selection with `XRPL_TESTNET_RPC_URL` or
 `python -m devtools.quickstart --xrpl-rpc-url ...`.
-The hosted docs also include follow-on RLUSD and USDC guides.
+The generated buyer seed and facilitator token are written to `.env.quickstart`
+and only echoed to stdout in redacted form.
+The demo buyer output is recording-friendly by default and now shows the x402
+challenge, the invoice id and XRPL fee used for signing, wallet A and wallet B
+balances before and after the payment, the x402 payment response, and the final
+HTTP/invoice/tx-hash summary.
+`demo.run.sh` now assigns unique `FACILITATOR_PORT` and `MERCHANT_PORT` values
+per run so isolated demo executions do not collide on host ports.
+
+### RLUSD
+
+Run this after the XRP quickstart is already working:
+
+```bash
+python -m devtools.rlusd_topup
+python -m devtools.demo_env --asset rlusd
+docker compose --env-file .env.quickstart.rlusd up --build
+docker compose --env-file .env.quickstart.rlusd --profile demo run --rm buyer
+```
+
+If the cached demo wallet is already funded with RLUSD, you can skip the top-up
+helper and start at `python -m devtools.demo_env --asset rlusd`. See the
+[RLUSD guide](docs/asset-guides/rlusd.md) for the full faucet and recovery flow.
+
+### USDC
+
+Run this after the XRP quickstart is already working:
+
+```bash
+python -m devtools.usdc_topup
+# if prompted for a manual Circle faucet claim, complete it and rerun once
+python -m devtools.usdc_topup
+python -m devtools.demo_env --asset usdc
+docker compose --env-file .env.quickstart.usdc up --build
+docker compose --env-file .env.quickstart.usdc --profile demo run --rm buyer
+```
+
+If the cached demo wallet is already funded with USDC, you can skip the top-up
+helper and start at `python -m devtools.demo_env --asset usdc`. See the
+[USDC guide](docs/asset-guides/usdc.md) for the full faucet and recovery flow.
 
 ## Full AI Agent Support
 

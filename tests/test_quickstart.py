@@ -28,6 +28,11 @@ def test_render_quickstart_env_contains_expected_values() -> None:
     assert "PAYMENT_ASSET=XRP:native" in rendered
 
 
+def test_mask_secret_preserves_prefix_and_redacts_remaining_characters() -> None:
+    assert quickstart.mask_secret("123456789", visible_prefix=3) == "123******"
+    assert quickstart.mask_secret("abcdef", visible_prefix=2) == "ab****"
+
+
 def test_quickstart_main_writes_env_file_and_prints_commands(
     monkeypatch,
     tmp_path: Path,
@@ -66,6 +71,16 @@ def test_quickstart_main_writes_env_file_and_prints_commands(
     assert "docker compose --env-file" in captured.out
     assert str(output_path) in captured.out
     assert f"Buyer address: {buyer_wallet.classic_address}" in captured.out
+    assert (
+        f"Buyer seed: {quickstart.mask_secret(buyer_wallet.seed or '', visible_prefix=3)}"
+        in captured.out
+    )
     assert "XRPL RPC URL: https://resolved.testnet.rpc/" in captured.out
+    assert (
+        "Facilitator bearer token: "
+        f"{quickstart.mask_secret('generated-token', visible_prefix=2)}"
+    ) in captured.out
+    assert buyer_wallet.seed not in captured.out
+    assert "generated-token" not in captured.out
     assert "XRPL_RPC_URL=https://resolved.testnet.rpc/" in output_path.read_text(encoding="utf-8")
     assert "generated-token" in output_path.read_text(encoding="utf-8")

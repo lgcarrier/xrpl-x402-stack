@@ -19,6 +19,7 @@ from xrpl_x402_core.assets import (
     parse_allowed_issued_assets,
     parse_asset_identifier,
     supported_asset_keys,
+    xrpl_currency_code,
 )
 from xrpl_x402_core.helpers import (
     amount_from_structured_amount,
@@ -89,5 +90,6 @@ __all__ = [
     "parse_asset_identifier",
     "payment_option_matches",
     "supported_asset_keys",
+    "xrpl_currency_code",
     "xrpl_asset_from_identifier",
 ]

@@ -20,6 +20,7 @@ from xrpl_x402_core import (
     decode_model_from_base64,
     encode_model_to_base64,
     parse_asset_identifier,
+    xrpl_currency_code,
 )
 
 PAYMENT_REQUIRED_HEADER = "PAYMENT-REQUIRED"
@@ -204,6 +205,8 @@ def decode_payment_required_response(
     body: bytes | None,
 ) -> PaymentRequired:
     header_value = headers.get(PAYMENT_REQUIRED_HEADER)
+    if header_value is None:
+        header_value = headers.get(PAYMENT_REQUIRED_HEADER.lower())
     if header_value:
         return decode_payment_required(header_value)
     if body is None:
@@ -233,7 +236,7 @@ def _to_xrpl_amount(asset: XRPLAsset, amount: XRPLAmount) -> str | IssuedCurrenc
     if asset.issuer is None:
         raise ValueError("Issued-asset payments require an issuer")
     return IssuedCurrencyAmount(
-        currency=asset.code,
+        currency=xrpl_currency_code(asset.code),
         issuer=asset.issuer,
         value=amount.value,
     )

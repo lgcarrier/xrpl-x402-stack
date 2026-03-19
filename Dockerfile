@@ -7,6 +7,7 @@ RUN addgroup --system app \
 
 WORKDIR /app
 COPY LICENSE ./LICENSE
+COPY devtools ./devtools
 COPY packages ./packages
 COPY examples ./examples
 RUN pip install --no-cache-dir /app/packages/core /app/packages/facilitator /app/packages/middleware /app/packages/client /app/packages/payer

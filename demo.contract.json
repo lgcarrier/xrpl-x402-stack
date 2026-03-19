@@ -1,0 +1,114 @@
+{
+  "name": "xrpl-x402-demo-runner",
+  "version": "1.0",
+  "description": "Deterministic demo execution contract for XRP, RLUSD, and USDC flows with fast-fail funding checks and recording-ready outputs.",
+
+  "execution": {
+    "mode": "docker-compose",
+    "compose_file": "docker-compose.yml",
+    "env_files": {
+      "XRP": ".env.quickstart",
+      "RLUSD": ".env.quickstart.rlusd",
+      "USDC": ".env.quickstart.usdc"
+    },
+    "profiles": {
+      "run": "demo",
+      "service": "buyer"
+    },
+    "command_template": "docker compose --env-file {env} --profile demo run --rm buyer"
+  },
+
+  "strategy": {
+    "parallel": true,
+    "max_discovery_time_sec": 5,
+    "lock_after_discovery": true,
+    "allow_fallbacks": false,
+    "allow_retries": false,
+    "allow_env_switching": false
+  },
+
+  "assets": [
+    {
+      "symbol": "XRP",
+      "required": true,
+      "env": ".env.quickstart",
+      "preflight": {
+        "check_balance": true,
+        "skip_if_unfunded": false
+      }
+    },
+    {
+      "symbol": "RLUSD",
+      "required": false,
+      "env": ".env.quickstart.rlusd",
+      "preflight": {
+        "check_balance": true,
+        "skip_if_unfunded": true,
+        "fast_fail": true
+      }
+    },
+    {
+      "symbol": "USDC",
+      "required": false,
+      "env": ".env.quickstart.usdc",
+      "preflight": {
+        "check_balance": true,
+        "skip_if_unfunded": true,
+        "fast_fail": true
+      }
+    }
+  ],
+
+  "preflight": {
+    "global_timeout_sec": 2,
+    "checks": [
+      "wallet_balance"
+    ]
+  },
+
+  "execution_rules": {
+    "run_order": "parallel",
+    "always_run": ["XRP"],
+    "conditional_run": ["RLUSD", "USDC"],
+    "skip_on_preflight_fail": true,
+    "no_top_up": true,
+    "no_rebuild": true,
+    "no_container_restart": true
+  },
+
+  "output": {
+    "format": "recording-ready",
+    "fields": [
+      "asset",
+      "x402_challenge",
+      "amount",
+      "fee",
+      "wallet_before",
+      "wallet_after",
+      "delta",
+      "invoice_id",
+      "tx_hash",
+      "settlement_status"
+    ],
+    "status_values": ["SUCCESS", "FAILED", "SKIPPED"]
+  },
+
+  "recording_script": {
+    "required": true,
+    "max_lines": 3,
+    "style": "concise_demo"
+  },
+
+  "timeouts": {
+    "total_budget_sec": 30,
+    "per_asset_soft_limit_sec": 10,
+    "skip_if_blocked_sec": 3
+  },
+
+  "constraints": {
+    "no_repo_rescan": true,
+    "no_readme_after_start": true,
+    "minimal_logging": true,
+    "no_explanations": true
+  }
+}

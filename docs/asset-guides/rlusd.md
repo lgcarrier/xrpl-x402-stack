@@ -37,20 +37,20 @@ If the helper reports a pending or rate-limited claim, rerun it later.
 
 ## Switch The Demo To RLUSD
 
-Edit `.env.quickstart` and set:
+Generate a derived env file:
 
-```dotenv
-PRICE_ASSET_CODE=RLUSD
-PRICE_ASSET_ISSUER=rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV
-PRICE_ASSET_AMOUNT=1.25
-PAYMENT_ASSET=RLUSD:rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV
+```bash
+python -m devtools.demo_env --asset rlusd
 ```
+
+That writes `.env.quickstart.rlusd` with the RLUSD merchant pricing, buyer asset selection,
+and any facilitator-side `ALLOWED_ISSUED_ASSETS` entry needed for the chosen issuer.
 
 Then restart the stack and rerun the buyer:
 
 ```bash
-docker compose --env-file .env.quickstart up --build
-docker compose --env-file .env.quickstart --profile demo run --rm buyer
+docker compose --env-file .env.quickstart.rlusd up --build
+docker compose --env-file .env.quickstart.rlusd --profile demo run --rm buyer
 ```
 
 The merchant example will price `/premium` in RLUSD, and the buyer example will select the matching issued-asset payment option.

@@ -30,20 +30,19 @@ On the rerun, the helper sweeps the claimed USDC into the canonical wallet when 
 
 ## Switch The Demo To USDC
 
-Edit `.env.quickstart` and set:
+Generate a derived env file:
 
-```dotenv
-PRICE_ASSET_CODE=USDC
-PRICE_ASSET_ISSUER=rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt
-PRICE_ASSET_AMOUNT=2.50
-PAYMENT_ASSET=USDC:rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt
+```bash
+python -m devtools.demo_env --asset usdc
 ```
+
+That writes `.env.quickstart.usdc` with the USDC merchant pricing and buyer asset selection.
 
 Then restart the stack and rerun the buyer:
 
 ```bash
-docker compose --env-file .env.quickstart up --build
-docker compose --env-file .env.quickstart --profile demo run --rm buyer
+docker compose --env-file .env.quickstart.usdc up --build
+docker compose --env-file .env.quickstart.usdc --profile demo run --rm buyer
 ```
 
 ## Notes

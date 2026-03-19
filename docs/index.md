@@ -83,40 +83,34 @@ When you switch the demo to issued assets, the merchant uses `PRICE_*` variables
 
 ### RLUSD Demo Config
 
-Set these values in `.env.quickstart`:
+Generate a derived env file:
 
-```dotenv
-PRICE_ASSET_CODE=RLUSD
-PRICE_ASSET_ISSUER=rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV
-PRICE_ASSET_AMOUNT=1.25
-PAYMENT_ASSET=RLUSD:rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV
+```bash
+python -m devtools.demo_env --asset rlusd
 ```
 
 Then restart the stack and rerun the buyer:
 
 ```bash
-docker compose --env-file .env.quickstart up --build
-docker compose --env-file .env.quickstart --profile demo run --rm buyer
+docker compose --env-file .env.quickstart.rlusd up --build
+docker compose --env-file .env.quickstart.rlusd --profile demo run --rm buyer
 ```
 
 Use the [RLUSD guide](asset-guides/rlusd.md) for faucet setup, trustline details, and sweep behavior.
 
 ### USDC Demo Config
 
-Set these values in `.env.quickstart`:
+Generate a derived env file:
 
-```dotenv
-PRICE_ASSET_CODE=USDC
-PRICE_ASSET_ISSUER=rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt
-PRICE_ASSET_AMOUNT=2.50
-PAYMENT_ASSET=USDC:rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt
+```bash
+python -m devtools.demo_env --asset usdc
 ```
 
 Then restart the stack and rerun the buyer:
 
 ```bash
-docker compose --env-file .env.quickstart up --build
-docker compose --env-file .env.quickstart --profile demo run --rm buyer
+docker compose --env-file .env.quickstart.usdc up --build
+docker compose --env-file .env.quickstart.usdc --profile demo run --rm buyer
 ```
 
 Use the [USDC guide](asset-guides/usdc.md) for the Circle faucet flow and sweep behavior.

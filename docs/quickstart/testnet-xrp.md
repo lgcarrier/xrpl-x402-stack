@@ -37,7 +37,7 @@ That command:
 - creates or reuses a cached XRPL Testnet wallet pair
 - writes `.env.quickstart`
 - auto-selects a healthy public XRPL Testnet RPC and writes it into `.env.quickstart` as `XRPL_RPC_URL`
-- prints the merchant address, buyer address, buyer seed, and the exact next commands
+- prints the merchant address, buyer address, redacted secret previews, and the exact next commands
 
 The generated file contains secrets and is ignored by git. Do not commit it.
 
@@ -106,6 +106,8 @@ You can reuse `.env.quickstart` and the cached wallets the next time you run the
 
 ## Next Steps
 
+- Generate `.env.quickstart.rlusd` with `python -m devtools.demo_env --asset rlusd`
+- Generate `.env.quickstart.usdc` with `python -m devtools.demo_env --asset usdc`
 - Follow the [RLUSD guide](../asset-guides/rlusd.md)
 - Follow the [USDC guide](../asset-guides/usdc.md)
 - Read [Payment Flow](../how-it-works/payment-flow.md)

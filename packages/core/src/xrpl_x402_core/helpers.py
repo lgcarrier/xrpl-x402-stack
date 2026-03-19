@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+from decimal import Decimal
 import json
 import re
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -71,9 +72,11 @@ def payment_option_matches(
         return False
     if option.amount.unit != amount.unit:
         return False
-    if option.amount.value != amount.value:
-        return False
     if option.amount.drops != amount.drops:
+        return False
+    if option.amount.unit == "issued" and Decimal(option.amount.value) != Decimal(amount.value):
+        return False
+    if option.amount.unit != "issued" and option.amount.value != amount.value:
         return False
     return True
 

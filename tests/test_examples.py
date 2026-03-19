@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from decimal import Decimal
 import importlib
 
 import httpx
@@ -11,6 +12,17 @@ from xrpl.wallet import Wallet
 import xrpl_x402_facilitator.factory as factory_module
 from xrpl_x402_facilitator.config import Settings
 from xrpl_x402_facilitator.factory import create_app
+from xrpl_x402_client import (
+    PAYMENT_REQUIRED_HEADER,
+    PAYMENT_RESPONSE_HEADER,
+    PAYMENT_SIGNATURE_HEADER,
+)
+from xrpl_x402_core import (
+    PaymentPayload,
+    RLUSD_TESTNET_ISSUER,
+    XRPLAmount,
+    decode_model_from_base64,
+)
 from xrpl_x402_facilitator.models import AssetDescriptor, SettleResponse, StructuredAmount, VerifyResponse
 from xrpl_x402_middleware import XRPLFacilitatorClient
 
@@ -247,3 +259,127 @@ def test_example_quickstart_flow_returns_paid_response(monkeypatch) -> None:
         "invoice_id": INVOICE_ID,
         "tx_hash": TX_HASH,
     }
+
+
+def test_demo_trace_renders_recording_friendly_summary(monkeypatch) -> None:
+    demo_trace = importlib.import_module("devtools.demo_trace")
+    demo_trace = importlib.reload(demo_trace)
+
+    buyer_wallet = Wallet.create()
+    signer = demo_trace.XRPLPaymentSigner(
+        buyer_wallet,
+        network="xrpl:1",
+        autofill_enabled=False,
+    )
+    destination = DESTINATION
+    invoice_id = "A" * 64
+
+    challenge = demo_trace.PaymentRequired(
+        error="Payment required",
+        accepts=[
+            demo_trace.XRPLPaymentOption(
+                network="xrpl:1",
+                payTo=destination,
+                maxAmountRequired="1.25",
+                asset=demo_trace.XRPLAsset(code="RLUSD", issuer=RLUSD_TESTNET_ISSUER),
+                amount=XRPLAmount(value="1.25", unit="issued"),
+                description="premium access",
+            )
+        ],
+    )
+
+    payment_response = demo_trace.PaymentResponse(
+        network="xrpl:1",
+        payer=buyer_wallet.classic_address,
+        payTo=destination,
+        invoiceId=invoice_id,
+        txHash=TX_HASH,
+        settlementStatus="validated",
+        asset=demo_trace.XRPLAsset(code="RLUSD", issuer=RLUSD_TESTNET_ISSUER),
+        amount=XRPLAmount(value="1.25", unit="issued"),
+    )
+
+    balance_snapshots = {
+        destination: [2_000_000, 2_000_000],
+        buyer_wallet.classic_address: [10_000_000, 9_999_988],
+    }
+    asset_snapshots = {
+        destination: [Decimal("4"), Decimal("5.25")],
+        buyer_wallet.classic_address: [Decimal("7"), Decimal("5.75")],
+    }
+    recorded_signatures: list[str] = []
+
+    def fake_get_validated_balance(_client, address: str) -> int:
+        return balance_snapshots[address].pop(0)
+
+    def fake_get_validated_trustline_balance(
+        _client,
+        address: str,
+        issuer: str,
+        *,
+        currency_code: str = "RLUSD",
+    ) -> Decimal:
+        assert issuer == RLUSD_TESTNET_ISSUER
+        assert currency_code == "RLUSD"
+        return asset_snapshots[address].pop(0)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if PAYMENT_SIGNATURE_HEADER not in request.headers:
+            return httpx.Response(
+                402,
+                headers={PAYMENT_REQUIRED_HEADER: demo_trace.encode_model_to_base64(challenge)},
+                request=request,
+            )
+
+        recorded_signatures.append(request.headers[PAYMENT_SIGNATURE_HEADER])
+        return httpx.Response(
+            200,
+            json={
+                "message": "premium content unlocked",
+                "payer": buyer_wallet.classic_address,
+                "invoice_id": invoice_id,
+                "tx_hash": TX_HASH,
+            },
+            headers={PAYMENT_RESPONSE_HEADER: demo_trace.encode_model_to_base64(payment_response)},
+            request=request,
+        )
+
+    monkeypatch.setattr(demo_trace, "get_validated_balance", fake_get_validated_balance)
+    monkeypatch.setattr(
+        demo_trace,
+        "get_validated_trustline_balance",
+        fake_get_validated_trustline_balance,
+    )
+
+    result = asyncio.run(
+        demo_trace.run_demo_trace(
+            signer=signer,
+            rpc_client=object(),
+            target_url="http://merchant.local/premium",
+            payment_asset=f"RLUSD:{RLUSD_TESTNET_ISSUER}",
+            timeout_seconds=1.0,
+            invoice_id=invoice_id,
+            transport=httpx.MockTransport(handler),
+        )
+    )
+
+    assert result.challenge_status_code == 402
+    assert result.final_status_code == 200
+    assert result.payment_response is not None
+    assert result.payment_response.tx_hash == TX_HASH
+
+    assert recorded_signatures
+    payment_payload = decode_model_from_base64(recorded_signatures[0], PaymentPayload)
+    assert payment_payload.payload.invoice_id == invoice_id
+
+    output = demo_trace.render_trace(result)
+    assert "x402 challenge" in output
+    assert "amount: 1.25 RLUSD" in output
+    assert f"pay to: {destination}" in output
+    assert f"invoice id: {invoice_id}" in output
+    assert "XRPL fee: 12 drops (0.000012 XRP)" in output
+    assert "Wallet A (merchant/payTo)" in output
+    assert "Wallet B (buyer/payer)" in output
+    assert "Wallet A: XRP +0.000000, RLUSD +1.25" in output
+    assert "Wallet B: XRP -0.000012, RLUSD -1.25" in output
+    assert f"tx hash: {TX_HASH}" in output
