@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "xrpl-x402-client"
-version = "0.1.1"
+version = "0.1.2"
 description = "Buyer-side Python SDK for XRPL exact x402 payments"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.12"
@@ -26,7 +26,7 @@ dependencies = [
   "httpx==0.28.1",
   "pydantic>=2,<3",
   "xrpl-py==4.5.0",
-  "xrpl-x402-core>=0.1.0,<0.2.0",
+  "xrpl-x402-core>=0.1.2,<0.2.0",
 ]
 
 [project.optional-dependencies]

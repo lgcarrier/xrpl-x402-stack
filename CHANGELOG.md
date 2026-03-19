@@ -2,6 +2,17 @@
 
 All notable changes to the Open XRPL x402 Stack are documented here.
 
+## xrpl-x402-core 0.1.2
+
+- Added `xrpl_currency_code(...)` as the shared helper for rendering XRPL issued-currency codes from 3-character, 20-byte ASCII, or 40-character hex asset identifiers.
+- Relaxed issued-amount equality checks in exact-payment matching so numerically equivalent decimal strings compare correctly.
+
+## xrpl-x402-client 0.1.2
+
+- Normalized issued-currency codes before building signed XRPL payments, so non-3-character asset codes serialize in XRPL wire format correctly.
+- Accepted lowercase `payment-required` response headers in addition to the canonical casing when decoding x402 challenges.
+- Raised the `xrpl-x402-core` dependency floor to `0.1.2` to require the shared issued-currency encoding helper.
+
 ## xrpl-x402-core 0.1.1
 
 - Added the shared XRPL Testnet RPC resolver used by quickstart tooling and other Testnet-aware flows to find a healthy public JSON-RPC endpoint.
@@ -31,14 +42,14 @@ All notable changes to the Open XRPL x402 Stack are documented here.
 - Initial public release of the buyer-side SDK for decoding `402` challenges, signing XRPL payments, and retrying requests via `httpx`.
 - Publishes optional `x402` adapter helpers for XRPL exact-payment interop.
 
-## xrpl-x402-client 0.1.1
-
-- Updated `xrpl-py` compatibility to `4.5.0` so downstream payer/MCP installs resolve cleanly.
-
 ## xrpl-x402-payer 0.1.0
 
 - Added official MCP server + CLI integration for buyer-side XRPL x402 payments.
 - Publishes the `xrpl-x402` CLI, bundled payer skill, local auto-pay proxy, receipt tracking, and stdio MCP tools for Claude Desktop and Cursor.
+
+## xrpl-x402-client 0.1.1
+
+- Updated `xrpl-py` compatibility to `4.5.0` so downstream payer/MCP installs resolve cleanly.
 
 ## xrpl-x402-payer 0.1.1
 
