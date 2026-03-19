@@ -4,7 +4,12 @@ import argparse
 from pathlib import Path
 from typing import Sequence
 
-from devtools.live_testnet_support import default_rlusd_issuer, default_usdc_issuer
+from devtools.live_testnet_support import (
+    default_rlusd_issuer,
+    default_usdc_issuer,
+    load_cached_demo_wallet_set,
+    wallet_cache_path,
+)
 from devtools.quickstart import DEFAULT_PRICE_DROPS
 from xrpl_x402_core import NETWORK_RLUSD_ISSUERS, NETWORK_USDC_ISSUERS, asset_identifier_from_parts
 
@@ -133,6 +138,24 @@ def configure_demo_env(
     )
 
 
+def resolve_demo_wallet_seed(asset: str) -> tuple[str, str]:
+    cache_path = wallet_cache_path()
+    wallet_set = load_cached_demo_wallet_set(cache_path)
+    if wallet_set is None:
+        raise RuntimeError(
+            f"Demo wallet cache {cache_path} is missing per-asset buyer wallets. "
+            "Rerun `python -m devtools.quickstart` first."
+        )
+
+    buyer_wallet = wallet_set.buyer_wallet(asset)
+    if buyer_wallet.seed is None:
+        raise RuntimeError(
+            f"Demo wallet cache {cache_path} is missing the seed for the {asset} buyer wallet. "
+            "Rerun `python -m devtools.quickstart` first."
+        )
+    return buyer_wallet.seed, buyer_wallet.classic_address
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
@@ -167,12 +190,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         amount=amount,
         price_drops=args.price_drops,
     )
+    buyer_seed, buyer_address = resolve_demo_wallet_seed(args.asset)
+    set_env_value(lines, "XRPL_WALLET_SEED", buyer_seed)
 
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     print(f"Wrote {output_path}")
     print(f"Network: {network_id}")
     print(f"Demo asset: {args.asset.upper()}")
+    print(f"Buyer address: {buyer_address}")
     print(f"Buyer payment asset: {get_env_value(lines, 'PAYMENT_ASSET')}")
     if args.asset == "xrp":
         print(f"Merchant price drops: {get_env_value(lines, 'PRICE_DROPS')}")

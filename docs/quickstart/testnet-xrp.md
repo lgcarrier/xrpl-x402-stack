@@ -34,10 +34,10 @@ If you need to pin the Testnet RPC used during wallet generation, either export
 
 That command:
 
-- creates or reuses a cached XRPL Testnet wallet pair
+- creates or reuses a cached shared merchant wallet plus dedicated buyer wallets for XRP, RLUSD, and USDC
 - writes `.env.quickstart`
 - auto-selects a healthy public XRPL Testnet RPC and writes it into `.env.quickstart` as `XRPL_RPC_URL`
-- prints the merchant address, buyer address, redacted secret previews, and the exact next commands
+- prints the merchant address, the XRP buyer address, redacted secret previews, and the exact next commands
 
 The generated file contains secrets and is ignored by git. Do not commit it.
 
@@ -103,6 +103,9 @@ docker compose --env-file .env.quickstart down
 ```
 
 You can reuse `.env.quickstart` and the cached wallets the next time you run the demo.
+The derived `.env.quickstart.rlusd` and `.env.quickstart.usdc` files will each
+use their own buyer wallet seed, so the three demo variants can sign in
+parallel without sequence-number contention.
 
 ## Next Steps
 

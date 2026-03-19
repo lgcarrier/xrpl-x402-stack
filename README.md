@@ -31,12 +31,28 @@ Override the quickstart-side selection with `XRPL_TESTNET_RPC_URL` or
 `python -m devtools.quickstart --xrpl-rpc-url ...`.
 The generated buyer seed and facilitator token are written to `.env.quickstart`
 and only echoed to stdout in redacted form.
+The quickstart wallet cache now keeps one shared merchant wallet plus separate
+buyer wallets for XRP, RLUSD, and USDC so the derived demo env files can run in
+parallel without sharing XRPL sequence numbers.
 The demo buyer output is recording-friendly by default and now shows the x402
 challenge, the invoice id and XRPL fee used for signing, wallet A and wallet B
 balances before and after the payment, the x402 payment response, and the final
 HTTP/invoice/tx-hash summary.
 `demo.run.sh` now assigns unique `FACILITATOR_PORT` and `MERCHANT_PORT` values
 per run so isolated demo executions do not collide on host ports.
+After a batch of demo runs, rebalance issued-asset funds back into the
+contract-referenced buyer wallets with:
+
+```bash
+python -m devtools.demo_rebalance --contract demo.contract.json
+```
+
+If you also want to sweep merchant XRP above a fixed floor back to the XRP demo
+buyer wallet, run:
+
+```bash
+python -m devtools.demo_rebalance --contract demo.contract.json --rebalance-xrp --merchant-xrp-floor 100
+```
 
 ### RLUSD
 
@@ -52,6 +68,8 @@ docker compose --env-file .env.quickstart.rlusd --profile demo run --rm buyer
 If the cached demo wallet is already funded with RLUSD, you can skip the top-up
 helper and start at `python -m devtools.demo_env --asset rlusd`. See the
 [RLUSD guide](docs/asset-guides/rlusd.md) for the full faucet and recovery flow.
+`devtools.demo_env --asset rlusd` now writes the RLUSD buyer seed into
+`.env.quickstart.rlusd` so the RLUSD run signs with its own wallet.
 
 ### USDC
 
@@ -69,6 +87,8 @@ docker compose --env-file .env.quickstart.usdc --profile demo run --rm buyer
 If the cached demo wallet is already funded with USDC, you can skip the top-up
 helper and start at `python -m devtools.demo_env --asset usdc`. See the
 [USDC guide](docs/asset-guides/usdc.md) for the full faucet and recovery flow.
+`devtools.demo_env --asset usdc` now writes the USDC buyer seed into
+`.env.quickstart.usdc` so the USDC run signs with its own wallet.
 
 ## Full AI Agent Support
 

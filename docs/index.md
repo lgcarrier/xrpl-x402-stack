@@ -80,6 +80,9 @@ claude mcp add xrpl-x402-payer -- xrpl-x402 mcp
 The primary quickstart is XRP on Testnet for the fastest real success path.
 
 When you switch the demo to issued assets, the merchant uses `PRICE_*` variables and the buyer uses `PAYMENT_ASSET`.
+The quickstart wallet cache keeps one shared merchant wallet plus dedicated
+buyer wallets for XRP, RLUSD, and USDC, so the derived env files can run in
+parallel without sharing one signing account.
 
 ### RLUSD Demo Config
 

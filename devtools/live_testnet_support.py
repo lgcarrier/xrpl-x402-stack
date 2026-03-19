@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_DOWN
 from pathlib import Path
@@ -38,7 +38,16 @@ DEFAULT_USDC_TESTNET_ISSUER = USDC_TESTNET_ISSUER
 RLUSD_MINT_URL = "https://tryrlusd.com/api/mint-xrpl"
 CIRCLE_FAUCET_URL = "https://faucet.circle.com/"
 DEFAULT_WALLET_CACHE_PATH = Path(".live-test-wallets/xrpl-testnet-wallets.json")
-WALLET_CACHE_VERSION = 1
+WALLET_CACHE_VERSION = 2
+DEMO_WALLET_XRP = "xrp"
+DEMO_WALLET_RLUSD = "rlusd"
+DEMO_WALLET_USDC = "usdc"
+DEMO_WALLET_ASSETS = (
+    DEMO_WALLET_XRP,
+    DEMO_WALLET_RLUSD,
+    DEMO_WALLET_USDC,
+)
+DEMO_WALLET_USAGE_CONTEXT_PREFIX = "xrpl-x402-facilitator-live-test"
 RLUSD_FAUCET_DRIP_AMOUNT = Decimal("10")
 RLUSD_CLAIM_STATE_FILE_NAME = "rlusd-claim-state.json"
 RLUSD_CLAIM_STATE_VERSION = 2
@@ -77,6 +86,29 @@ class LiveWalletPair:
 
     def as_list(self) -> list[Wallet]:
         return [self.wallet_a, self.wallet_b]
+
+
+@dataclass(frozen=True)
+class DemoWalletSet:
+    merchant_wallet: Wallet
+    buyers: dict[str, Wallet]
+
+    def buyer_wallet(self, asset: str) -> Wallet:
+        if asset not in DEMO_WALLET_ASSETS:
+            raise ValueError(f"Unsupported demo wallet asset {asset}")
+        try:
+            return self.buyers[asset]
+        except KeyError as exc:
+            raise ValueError(f"Demo wallet cache is missing the {asset} buyer wallet") from exc
+
+    def as_live_wallet_pair(self) -> LiveWalletPair:
+        return LiveWalletPair(
+            wallet_a=self.merchant_wallet,
+            wallet_b=self.buyer_wallet(DEMO_WALLET_XRP),
+        )
+
+    def all_wallets(self) -> list[Wallet]:
+        return [self.merchant_wallet] + [self.buyer_wallet(asset) for asset in DEMO_WALLET_ASSETS]
 
 
 @dataclass
@@ -125,6 +157,8 @@ class RLUSDTopUpResult:
     swept_amount: Decimal = field(default_factory=lambda: Decimal("0"))
     deleted_wallets: int = 0
     created_claim_wallet_address: str | None = None
+    buyer_wallet_address: str | None = None
+    bridged_amount: Decimal = field(default_factory=lambda: Decimal("0"))
 
 
 @dataclass
@@ -169,6 +203,8 @@ class USDCTopUpResult:
     swept_amount: Decimal = field(default_factory=lambda: Decimal("0"))
     deleted_wallets: int = 0
     created_claim_wallet_address: str | None = None
+    buyer_wallet_address: str | None = None
+    bridged_amount: Decimal = field(default_factory=lambda: Decimal("0"))
 
 
 def default_rlusd_issuer() -> str:
@@ -199,24 +235,36 @@ def usdc_claim_state_path(cache_path: Path | None = None) -> Path:
     return resolved_cache_path.parent / USDC_CLAIM_STATE_FILE_NAME
 
 
-def get_live_wallet_pair(client: JsonRpcClient) -> LiveWalletPair:
-    cache_path = wallet_cache_path()
-    cached_wallets = _load_cached_wallet_pair(cache_path)
-    if cached_wallets is not None and _wallet_pair_is_active(client, cached_wallets):
-        return cached_wallets
+def load_cached_demo_wallet_set(cache_path: Path | None = None) -> DemoWalletSet | None:
+    resolved_cache_path = cache_path or wallet_cache_path()
+    payload = _load_wallet_cache_payload(resolved_cache_path)
+    return _demo_wallet_set_from_payload(payload)
 
-    fresh_wallets = LiveWalletPair(
-        wallet_a=generate_faucet_wallet(
-            client,
-            usage_context="xrpl-x402-facilitator-live-test",
-        ),
-        wallet_b=generate_faucet_wallet(
-            client,
-            usage_context="xrpl-x402-facilitator-live-test",
-        ),
-    )
-    _write_wallet_cache(cache_path, fresh_wallets)
+
+def get_demo_wallet_set(client: JsonRpcClient) -> DemoWalletSet:
+    cache_path = wallet_cache_path()
+    payload = _load_wallet_cache_payload(cache_path)
+
+    cached_demo_wallets = _demo_wallet_set_from_payload(payload)
+    if cached_demo_wallets is not None:
+        refreshed_wallets, changed = _refresh_demo_wallet_set(client, cached_demo_wallets)
+        if changed:
+            _write_demo_wallet_cache(cache_path, refreshed_wallets)
+        return refreshed_wallets
+
+    legacy_pair = _legacy_wallet_pair_from_payload(payload)
+    if legacy_pair is not None and _wallet_pair_is_active(client, legacy_pair):
+        upgraded_wallets = _upgrade_legacy_wallet_pair(client, legacy_pair)
+        _write_demo_wallet_cache(cache_path, upgraded_wallets)
+        return upgraded_wallets
+
+    fresh_wallets = _create_demo_wallet_set(client)
+    _write_demo_wallet_cache(cache_path, fresh_wallets)
     return fresh_wallets
+
+
+def get_live_wallet_pair(client: JsonRpcClient) -> LiveWalletPair:
+    return get_demo_wallet_set(client).as_live_wallet_pair()
 
 
 def get_validated_account_root(client: JsonRpcClient, address: str) -> dict[str, Any] | None:
@@ -834,47 +882,63 @@ def recover_tracked_claim_wallets(
 
 def claim_rlusd_topup(
     client: JsonRpcClient,
-    wallets: LiveWalletPair,
+    wallets: LiveWalletPair | DemoWalletSet,
     issuer: str,
     *,
     session_token: str | None,
     now: datetime | None = None,
     claim_state_file: Path | None = None,
 ) -> RLUSDTopUpResult:
+    bridge_enabled = isinstance(wallets, DemoWalletSet)
+    accumulator_wallet, buyer_wallet = _resolve_topup_wallets(wallets, asset=DEMO_WALLET_RLUSD)
     state_path = claim_state_file or claim_state_path()
     claim_started_at = now or datetime.now(timezone.utc)
     state, recovery = recover_tracked_claim_wallets(
         client,
-        wallets.wallet_a,
+        accumulator_wallet,
         issuer,
         claim_state_file=state_path,
         now=claim_started_at,
     )
-    ensure_rlusd_trustline(client, wallets.wallet_a, issuer)
+    ensure_rlusd_trustline(client, accumulator_wallet, issuer)
 
     cooldown_until = next_rlusd_claim_time(state)
     if cooldown_until is not None and claim_started_at < cooldown_until:
-        return RLUSDTopUpResult(
-            status="cooldown",
-            canonical_wallet_address=wallets.wallet_a.classic_address,
-            claim_state_path=state_path,
-            cooldown_until=cooldown_until,
-            swept_amount=recovery.recovered_rlusd_amount,
-            deleted_wallets=recovery.deleted_wallets,
-            message=f"Skipping RLUSD claim until {cooldown_until.isoformat()}",
+        return _finalize_rlusd_topup_result(
+            client,
+            RLUSDTopUpResult(
+                status="cooldown",
+                canonical_wallet_address=accumulator_wallet.classic_address,
+                claim_state_path=state_path,
+                cooldown_until=cooldown_until,
+                swept_amount=recovery.recovered_rlusd_amount,
+                deleted_wallets=recovery.deleted_wallets,
+                message=f"Skipping RLUSD claim until {cooldown_until.isoformat()}",
+            ),
+            accumulator_wallet=accumulator_wallet,
+            buyer_wallet=buyer_wallet,
+            issuer=issuer,
+            bridge_enabled=bridge_enabled,
         )
 
     if not session_token:
-        return RLUSDTopUpResult(
-            status="missing_token",
-            canonical_wallet_address=wallets.wallet_a.classic_address,
-            claim_state_path=state_path,
-            swept_amount=recovery.recovered_rlusd_amount,
-            deleted_wallets=recovery.deleted_wallets,
-            message=(
-                f"Recovered tracked claim wallets. Set {TRYRLUSD_SESSION_TOKEN_ENV} to "
-                "attempt another RLUSD claim."
+        return _finalize_rlusd_topup_result(
+            client,
+            RLUSDTopUpResult(
+                status="missing_token",
+                canonical_wallet_address=accumulator_wallet.classic_address,
+                claim_state_path=state_path,
+                swept_amount=recovery.recovered_rlusd_amount,
+                deleted_wallets=recovery.deleted_wallets,
+                message=(
+                    f"Recovered tracked claim wallets. Set {TRYRLUSD_SESSION_TOKEN_ENV} to "
+                    "attempt another RLUSD claim."
+                ),
             ),
+            accumulator_wallet=accumulator_wallet,
+            buyer_wallet=buyer_wallet,
+            issuer=issuer,
+            bridge_enabled=bridge_enabled,
         )
 
     state.last_claim_attempt_at = claim_started_at
@@ -921,24 +985,31 @@ def claim_rlusd_topup(
         _recover_claim_wallet(
             client,
             claim_wallet_state,
-            wallets.wallet_a,
+            accumulator_wallet,
             issuer,
             now=claim_started_at,
         )
         write_rlusd_claim_state(state_path, state)
 
-        return RLUSDTopUpResult(
-            status="claimed",
-            canonical_wallet_address=wallets.wallet_a.classic_address,
-            claim_state_path=state_path,
-            claim_tx_hash=claim_tx_hash,
-            cooldown_until=next_rlusd_claim_time(state),
-            swept_amount=recovery.recovered_rlusd_amount + RLUSD_FAUCET_DRIP_AMOUNT,
-            deleted_wallets=recovery.deleted_wallets + int(
-                claim_wallet_state.status == CLAIM_WALLET_STATUS_DELETED
+        return _finalize_rlusd_topup_result(
+            client,
+            RLUSDTopUpResult(
+                status="claimed",
+                canonical_wallet_address=accumulator_wallet.classic_address,
+                claim_state_path=state_path,
+                claim_tx_hash=claim_tx_hash,
+                cooldown_until=next_rlusd_claim_time(state),
+                swept_amount=recovery.recovered_rlusd_amount + RLUSD_FAUCET_DRIP_AMOUNT,
+                deleted_wallets=recovery.deleted_wallets + int(
+                    claim_wallet_state.status == CLAIM_WALLET_STATUS_DELETED
+                ),
+                created_claim_wallet_address=claim_wallet.classic_address,
+                message=f"Claimed {RLUSD_FAUCET_DRIP_AMOUNT} RLUSD to {claim_wallet.classic_address}",
             ),
-            created_claim_wallet_address=claim_wallet.classic_address,
-            message=f"Claimed {RLUSD_FAUCET_DRIP_AMOUNT} RLUSD to {claim_wallet.classic_address}",
+            accumulator_wallet=accumulator_wallet,
+            buyer_wallet=buyer_wallet,
+            issuer=issuer,
+            bridge_enabled=bridge_enabled,
         )
     except RLUSDMintRateLimitedError as exc:
         claim_wallet_state.claim_attempted_at = claim_started_at
@@ -947,19 +1018,26 @@ def claim_rlusd_topup(
         _recover_claim_wallet(
             client,
             claim_wallet_state,
-            wallets.wallet_a,
+            accumulator_wallet,
             issuer,
             now=claim_started_at,
         )
         write_rlusd_claim_state(state_path, state)
-        return RLUSDTopUpResult(
-            status="rate_limited",
-            canonical_wallet_address=wallets.wallet_a.classic_address,
-            claim_state_path=state_path,
-            swept_amount=recovery.recovered_rlusd_amount,
-            deleted_wallets=recovery.deleted_wallets,
-            created_claim_wallet_address=claim_wallet.classic_address,
-            message=str(exc),
+        return _finalize_rlusd_topup_result(
+            client,
+            RLUSDTopUpResult(
+                status="rate_limited",
+                canonical_wallet_address=accumulator_wallet.classic_address,
+                claim_state_path=state_path,
+                swept_amount=recovery.recovered_rlusd_amount,
+                deleted_wallets=recovery.deleted_wallets,
+                created_claim_wallet_address=claim_wallet.classic_address,
+                message=str(exc),
+            ),
+            accumulator_wallet=accumulator_wallet,
+            buyer_wallet=buyer_wallet,
+            issuer=issuer,
+            bridge_enabled=bridge_enabled,
         )
     except Exception as exc:
         claim_wallet_state.claim_attempted_at = claim_started_at
@@ -968,20 +1046,253 @@ def claim_rlusd_topup(
         _recover_claim_wallet(
             client,
             claim_wallet_state,
-            wallets.wallet_a,
+            accumulator_wallet,
             issuer,
             now=claim_started_at,
         )
         write_rlusd_claim_state(state_path, state)
-        return RLUSDTopUpResult(
-            status="claim_failed",
-            canonical_wallet_address=wallets.wallet_a.classic_address,
-            claim_state_path=state_path,
-            swept_amount=recovery.recovered_rlusd_amount,
-            deleted_wallets=recovery.deleted_wallets,
-            created_claim_wallet_address=claim_wallet.classic_address,
-            message=f"RLUSD top-up failed: {exc}",
+        return _finalize_rlusd_topup_result(
+            client,
+            RLUSDTopUpResult(
+                status="claim_failed",
+                canonical_wallet_address=accumulator_wallet.classic_address,
+                claim_state_path=state_path,
+                swept_amount=recovery.recovered_rlusd_amount,
+                deleted_wallets=recovery.deleted_wallets,
+                created_claim_wallet_address=claim_wallet.classic_address,
+                message=f"RLUSD top-up failed: {exc}",
+            ),
+            accumulator_wallet=accumulator_wallet,
+            buyer_wallet=buyer_wallet,
+            issuer=issuer,
+            bridge_enabled=bridge_enabled,
         )
+
+
+def _resolve_topup_wallets(
+    wallets: LiveWalletPair | DemoWalletSet,
+    *,
+    asset: str,
+) -> tuple[Wallet, Wallet]:
+    if isinstance(wallets, DemoWalletSet):
+        return wallets.merchant_wallet, wallets.buyer_wallet(asset)
+    return wallets.wallet_a, wallets.wallet_b
+
+
+def _bridge_issued_balance_to_buyer(
+    client: JsonRpcClient,
+    accumulator_wallet: Wallet,
+    buyer_wallet: Wallet,
+    issuer: str,
+    *,
+    currency_code: str,
+    balance_getter: Any,
+    trustline_ensurer: Any,
+    payment_submitter: Any,
+) -> Decimal:
+    if accumulator_wallet.classic_address == buyer_wallet.classic_address:
+        return Decimal("0")
+
+    accumulator_balance = balance_getter(client, accumulator_wallet.classic_address, issuer)
+    if accumulator_balance <= 0:
+        return Decimal("0")
+
+    trustline_ensurer(client, buyer_wallet, issuer)
+    starting_balance = balance_getter(client, buyer_wallet.classic_address, issuer)
+    payment_submitter(
+        client,
+        accumulator_wallet,
+        buyer_wallet.classic_address,
+        issuer,
+        accumulator_balance,
+    )
+    wait_for_trustline_balance_increase(
+        client,
+        buyer_wallet.classic_address,
+        issuer,
+        starting_balance=starting_balance,
+        increase=accumulator_balance,
+        currency_code=currency_code,
+    )
+    return accumulator_balance
+
+
+def _bridge_rlusd_to_buyer(
+    client: JsonRpcClient,
+    accumulator_wallet: Wallet,
+    buyer_wallet: Wallet,
+    issuer: str,
+) -> Decimal:
+    return _bridge_issued_balance_to_buyer(
+        client,
+        accumulator_wallet,
+        buyer_wallet,
+        issuer,
+        currency_code=RLUSD_CODE,
+        balance_getter=get_validated_trustline_balance,
+        trustline_ensurer=ensure_rlusd_trustline,
+        payment_submitter=submit_validated_rlusd_payment,
+    )
+
+
+def _bridge_usdc_to_buyer(
+    client: JsonRpcClient,
+    accumulator_wallet: Wallet,
+    buyer_wallet: Wallet,
+    issuer: str,
+) -> Decimal:
+    return _bridge_issued_balance_to_buyer(
+        client,
+        accumulator_wallet,
+        buyer_wallet,
+        issuer,
+        currency_code=USDC_CODE,
+        balance_getter=get_validated_usdc_trustline_balance,
+        trustline_ensurer=ensure_usdc_trustline,
+        payment_submitter=submit_validated_usdc_payment,
+    )
+
+
+def _safe_issued_balance_lookup(
+    balance_getter: Any,
+    client: JsonRpcClient,
+    address: str,
+    issuer: str,
+) -> Decimal | None:
+    try:
+        return balance_getter(client, address, issuer)
+    except Exception:
+        return None
+
+
+def _bridge_failure_message(
+    *,
+    base_message: str,
+    asset_code: str,
+    accumulator_wallet: Wallet,
+    buyer_wallet: Wallet,
+    exc: Exception,
+    remaining_balance: Decimal | None,
+) -> str:
+    if remaining_balance is None:
+        remaining_text = (
+            f"Funds remain on accumulator wallet {accumulator_wallet.classic_address}."
+        )
+    else:
+        remaining_text = (
+            f"{remaining_balance} {asset_code} remain on accumulator wallet "
+            f"{accumulator_wallet.classic_address}."
+        )
+    return (
+        f"{base_message} Failed to fund buyer wallet {buyer_wallet.classic_address}. "
+        f"{remaining_text} Original error: {exc}"
+    )
+
+
+def _finalize_rlusd_topup_result(
+    client: JsonRpcClient,
+    result: RLUSDTopUpResult,
+    *,
+    accumulator_wallet: Wallet,
+    buyer_wallet: Wallet,
+    issuer: str,
+    bridge_enabled: bool,
+) -> RLUSDTopUpResult:
+    try:
+        if not bridge_enabled:
+            return replace(result, buyer_wallet_address=buyer_wallet.classic_address)
+        bridged_amount = _bridge_rlusd_to_buyer(
+            client,
+            accumulator_wallet,
+            buyer_wallet,
+            issuer,
+        )
+    except Exception as exc:
+        remaining_balance = _safe_issued_balance_lookup(
+            get_validated_trustline_balance,
+            client,
+            accumulator_wallet.classic_address,
+            issuer,
+        )
+        return replace(
+            result,
+            status="bridge_failed",
+            message=_bridge_failure_message(
+                base_message=result.message,
+                asset_code="RLUSD",
+                accumulator_wallet=accumulator_wallet,
+                buyer_wallet=buyer_wallet,
+                exc=exc,
+                remaining_balance=remaining_balance,
+            ),
+            buyer_wallet_address=buyer_wallet.classic_address,
+        )
+
+    message = result.message
+    if bridged_amount > 0:
+        message = (
+            f"{message} Funded buyer wallet {buyer_wallet.classic_address} "
+            f"with {bridged_amount} RLUSD."
+        )
+    return replace(
+        result,
+        message=message,
+        buyer_wallet_address=buyer_wallet.classic_address,
+        bridged_amount=bridged_amount,
+    )
+
+
+def _finalize_usdc_topup_result(
+    client: JsonRpcClient,
+    result: USDCTopUpResult,
+    *,
+    accumulator_wallet: Wallet,
+    buyer_wallet: Wallet,
+    issuer: str,
+    bridge_enabled: bool,
+) -> USDCTopUpResult:
+    try:
+        if not bridge_enabled:
+            return replace(result, buyer_wallet_address=buyer_wallet.classic_address)
+        bridged_amount = _bridge_usdc_to_buyer(
+            client,
+            accumulator_wallet,
+            buyer_wallet,
+            issuer,
+        )
+    except Exception as exc:
+        remaining_balance = _safe_issued_balance_lookup(
+            get_validated_usdc_trustline_balance,
+            client,
+            accumulator_wallet.classic_address,
+            issuer,
+        )
+        return replace(
+            result,
+            status="bridge_failed",
+            message=_bridge_failure_message(
+                base_message=result.message,
+                asset_code="USDC",
+                accumulator_wallet=accumulator_wallet,
+                buyer_wallet=buyer_wallet,
+                exc=exc,
+                remaining_balance=remaining_balance,
+            ),
+            buyer_wallet_address=buyer_wallet.classic_address,
+        )
+
+    message = result.message
+    if bridged_amount > 0:
+        message = (
+            f"{message} Funded buyer wallet {buyer_wallet.classic_address} "
+            f"with {bridged_amount} USDC."
+        )
+    return replace(
+        result,
+        message=message,
+        buyer_wallet_address=buyer_wallet.classic_address,
+        bridged_amount=bridged_amount,
+    )
 
 
 def consolidate_rlusd_to_wallet_a(
@@ -1064,22 +1375,24 @@ def recover_tracked_usdc_claim_wallets(
 
 def prepare_usdc_topup(
     client: JsonRpcClient,
-    wallets: LiveWalletPair,
+    wallets: LiveWalletPair | DemoWalletSet,
     issuer: str,
     *,
     now: datetime | None = None,
     claim_state_file: Path | None = None,
 ) -> USDCTopUpResult:
+    bridge_enabled = isinstance(wallets, DemoWalletSet)
+    accumulator_wallet, buyer_wallet = _resolve_topup_wallets(wallets, asset=DEMO_WALLET_USDC)
     state_path = claim_state_file or usdc_claim_state_path()
     prepared_at = now or datetime.now(timezone.utc)
     state, recovery = recover_tracked_usdc_claim_wallets(
         client,
-        wallets.wallet_a,
+        accumulator_wallet,
         issuer,
         claim_state_file=state_path,
         now=prepared_at,
     )
-    ensure_usdc_trustline(client, wallets.wallet_a, issuer)
+    ensure_usdc_trustline(client, accumulator_wallet, issuer)
 
     pending_wallet = next(
         (
@@ -1090,26 +1403,40 @@ def prepare_usdc_topup(
         None,
     )
     if pending_wallet is not None:
-        return USDCTopUpResult(
-            status="awaiting_manual_claim",
-            canonical_wallet_address=wallets.wallet_a.classic_address,
-            claim_state_path=state_path,
-            swept_amount=recovery.recovered_usdc_amount,
-            deleted_wallets=recovery.deleted_wallets,
-            created_claim_wallet_address=pending_wallet.classic_address,
-            message=_format_usdc_manual_claim_message(pending_wallet.classic_address),
+        return _finalize_usdc_topup_result(
+            client,
+            USDCTopUpResult(
+                status="awaiting_manual_claim",
+                canonical_wallet_address=accumulator_wallet.classic_address,
+                claim_state_path=state_path,
+                swept_amount=recovery.recovered_usdc_amount,
+                deleted_wallets=recovery.deleted_wallets,
+                created_claim_wallet_address=pending_wallet.classic_address,
+                message=_format_usdc_manual_claim_message(pending_wallet.classic_address),
+            ),
+            accumulator_wallet=accumulator_wallet,
+            buyer_wallet=buyer_wallet,
+            issuer=issuer,
+            bridge_enabled=bridge_enabled,
         )
 
     cooldown_until = next_usdc_claim_time(state)
     if cooldown_until is not None and prepared_at < cooldown_until:
-        return USDCTopUpResult(
-            status="cooldown",
-            canonical_wallet_address=wallets.wallet_a.classic_address,
-            claim_state_path=state_path,
-            cooldown_until=cooldown_until,
-            swept_amount=recovery.recovered_usdc_amount,
-            deleted_wallets=recovery.deleted_wallets,
-            message=f"Skipping USDC claim wallet creation until {cooldown_until.isoformat()}",
+        return _finalize_usdc_topup_result(
+            client,
+            USDCTopUpResult(
+                status="cooldown",
+                canonical_wallet_address=accumulator_wallet.classic_address,
+                claim_state_path=state_path,
+                cooldown_until=cooldown_until,
+                swept_amount=recovery.recovered_usdc_amount,
+                deleted_wallets=recovery.deleted_wallets,
+                message=f"Skipping USDC claim wallet creation until {cooldown_until.isoformat()}",
+            ),
+            accumulator_wallet=accumulator_wallet,
+            buyer_wallet=buyer_wallet,
+            issuer=issuer,
+            bridge_enabled=bridge_enabled,
         )
 
     claim_wallet = generate_faucet_wallet(
@@ -1133,14 +1460,21 @@ def prepare_usdc_topup(
     state.last_prepared_claim_at = prepared_at
     write_usdc_claim_state(state_path, state)
 
-    return USDCTopUpResult(
-        status="awaiting_manual_claim",
-        canonical_wallet_address=wallets.wallet_a.classic_address,
-        claim_state_path=state_path,
-        swept_amount=recovery.recovered_usdc_amount,
-        deleted_wallets=recovery.deleted_wallets,
-        created_claim_wallet_address=claim_wallet.classic_address,
-        message=_format_usdc_manual_claim_message(claim_wallet.classic_address),
+    return _finalize_usdc_topup_result(
+        client,
+        USDCTopUpResult(
+            status="awaiting_manual_claim",
+            canonical_wallet_address=accumulator_wallet.classic_address,
+            claim_state_path=state_path,
+            swept_amount=recovery.recovered_usdc_amount,
+            deleted_wallets=recovery.deleted_wallets,
+            created_claim_wallet_address=claim_wallet.classic_address,
+            message=_format_usdc_manual_claim_message(claim_wallet.classic_address),
+        ),
+        accumulator_wallet=accumulator_wallet,
+        buyer_wallet=buyer_wallet,
+        issuer=issuer,
+        bridge_enabled=bridge_enabled,
     )
 
 
@@ -1582,19 +1916,52 @@ def _format_usdc_manual_claim_message(address: str) -> str:
     return (
         f"Visit {CIRCLE_FAUCET_URL}, choose XRPL Testnet, and claim "
         f"{USDC_FAUCET_DRIP_AMOUNT} USDC to {address}. Then rerun "
-        "`python -m devtools.usdc_topup` to sweep the funds into the accumulator wallet."
+        "`python -m devtools.usdc_topup` to sweep the funds into the shared accumulator "
+        "wallet and fund the USDC buyer wallet."
     )
 
 
 def _load_cached_wallet_pair(cache_path: Path) -> LiveWalletPair | None:
+    payload = _load_wallet_cache_payload(cache_path)
+    demo_wallets = _demo_wallet_set_from_payload(payload)
+    if demo_wallets is not None:
+        return demo_wallets.as_live_wallet_pair()
+    return _legacy_wallet_pair_from_payload(payload)
+
+
+def _load_wallet_cache_payload(cache_path: Path) -> dict[str, Any] | None:
     try:
         payload = json.loads(cache_path.read_text())
     except FileNotFoundError:
         return None
     except json.JSONDecodeError:
         return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
 
-    if payload.get("version") != WALLET_CACHE_VERSION:
+
+def _demo_wallet_set_from_payload(payload: dict[str, Any] | None) -> DemoWalletSet | None:
+    if payload is None or payload.get("version") != WALLET_CACHE_VERSION:
+        return None
+
+    try:
+        merchant_wallet = _wallet_from_cache_record(payload["merchant"])
+        buyers_payload = payload["buyers"]
+        if not isinstance(buyers_payload, dict):
+            return None
+        buyers = {
+            asset: _wallet_from_cache_record(buyers_payload[asset])
+            for asset in DEMO_WALLET_ASSETS
+        }
+    except (KeyError, TypeError, ValueError):
+        return None
+
+    return DemoWalletSet(merchant_wallet=merchant_wallet, buyers=buyers)
+
+
+def _legacy_wallet_pair_from_payload(payload: dict[str, Any] | None) -> LiveWalletPair | None:
+    if payload is None or payload.get("version") != 1:
         return None
 
     try:
@@ -1613,18 +1980,79 @@ def _wallet_from_cache_record(record: dict[str, str]) -> Wallet:
     return wallet
 
 
-def _write_wallet_cache(cache_path: Path, wallets: LiveWalletPair) -> None:
+def _create_demo_wallet_set(client: JsonRpcClient) -> DemoWalletSet:
+    return DemoWalletSet(
+        merchant_wallet=_generate_demo_wallet(client, "merchant"),
+        buyers={
+            asset: _generate_demo_wallet(client, f"buyer-{asset}")
+            for asset in DEMO_WALLET_ASSETS
+        },
+    )
+
+
+def _upgrade_legacy_wallet_pair(
+    client: JsonRpcClient,
+    legacy_pair: LiveWalletPair,
+) -> DemoWalletSet:
+    buyers = {
+        DEMO_WALLET_XRP: legacy_pair.wallet_b,
+        DEMO_WALLET_RLUSD: _generate_demo_wallet(client, f"buyer-{DEMO_WALLET_RLUSD}"),
+        DEMO_WALLET_USDC: _generate_demo_wallet(client, f"buyer-{DEMO_WALLET_USDC}"),
+    }
+    return DemoWalletSet(
+        merchant_wallet=legacy_pair.wallet_a,
+        buyers=buyers,
+    )
+
+
+def _refresh_demo_wallet_set(
+    client: JsonRpcClient,
+    cached_wallets: DemoWalletSet,
+) -> tuple[DemoWalletSet, bool]:
+    changed = False
+    merchant_wallet = cached_wallets.merchant_wallet
+    if not _account_exists(client, merchant_wallet.classic_address):
+        merchant_wallet = _generate_demo_wallet(client, "merchant")
+        changed = True
+
+    buyers: dict[str, Wallet] = {}
+    for asset in DEMO_WALLET_ASSETS:
+        try:
+            buyer_wallet = cached_wallets.buyer_wallet(asset)
+        except ValueError:
+            buyer_wallet = _generate_demo_wallet(client, f"buyer-{asset}")
+            changed = True
+        else:
+            if not _account_exists(client, buyer_wallet.classic_address):
+                buyer_wallet = _generate_demo_wallet(client, f"buyer-{asset}")
+                changed = True
+        buyers[asset] = buyer_wallet
+
+    return DemoWalletSet(merchant_wallet=merchant_wallet, buyers=buyers), changed
+
+
+def _write_demo_wallet_cache(cache_path: Path, wallets: DemoWalletSet) -> None:
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "version": WALLET_CACHE_VERSION,
-        "wallet_a": _wallet_to_cache_record(wallets.wallet_a),
-        "wallet_b": _wallet_to_cache_record(wallets.wallet_b),
+        "merchant": _wallet_to_cache_record(wallets.merchant_wallet),
+        "buyers": {
+            asset: _wallet_to_cache_record(wallets.buyer_wallet(asset))
+            for asset in DEMO_WALLET_ASSETS
+        },
     }
     cache_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     try:
         os.chmod(cache_path, 0o600)
     except OSError:
         pass
+
+
+def _generate_demo_wallet(client: JsonRpcClient, role: str) -> Wallet:
+    return generate_faucet_wallet(
+        client,
+        usage_context=f"{DEMO_WALLET_USAGE_CONTEXT_PREFIX}-{role}",
+    )
 
 
 def _wallet_to_cache_record(wallet: Wallet) -> dict[str, str]:

@@ -21,6 +21,7 @@ from xrpl_x402_facilitator.xrpl_service import XRPLService
 from devtools.live_testnet_support import (
     DEFAULT_RLUSD_TESTNET_ISSUER,
     DEFAULT_USDC_TESTNET_ISSUER,
+    DemoWalletSet,
     LIVE_TEST_FLAG,
     RLUSD_TESTNET_ISSUER_ENV,
     USDC_TESTNET_ISSUER_ENV,
@@ -29,6 +30,7 @@ from devtools.live_testnet_support import (
     consolidate_usdc_to_wallet_a,
     ensure_rlusd_trustline,
     ensure_usdc_trustline,
+    get_demo_wallet_set,
     get_live_wallet_pair,
     get_validated_balance,
     get_validated_trustline_balance,
@@ -138,10 +140,10 @@ def test_live_rlusd_payment_round_trip() -> None:
     rpc_url = resolve_live_testnet_rpc_url()
     client = JsonRpcClient(rpc_url)
     issuer = os.environ.get(RLUSD_TESTNET_ISSUER_ENV, DEFAULT_RLUSD_TESTNET_ISSUER)
-    wallets = get_live_wallet_pair(client)
-    recover_tracked_claim_wallets(client, wallets.wallet_a, issuer)
+    wallets = get_demo_wallet_set(client)
+    recover_tracked_claim_wallets(client, wallets.merchant_wallet, issuer)
 
-    for wallet in wallets.as_list():
+    for wallet in (wallets.merchant_wallet, wallets.buyer_wallet("rlusd")):
         ensure_rlusd_trustline(client, wallet, issuer)
 
     sender, receiver = _select_rlusd_wallets(
@@ -218,11 +220,15 @@ def test_live_rlusd_payment_round_trip() -> None:
     assert normalize_currency_code(str(ledger_amount["currency"])) == "RLUSD"
     assert ledger_amount["issuer"] == issuer
     assert Decimal(str(ledger_amount["value"])) == RLUSD_PAYMENT_VALUE
-    consolidate_rlusd_to_wallet_a(client, wallets, issuer)
-    assert get_validated_trustline_balance(client, wallets.wallet_a.classic_address, issuer) >= (
+    settle_pair = LiveWalletPair(
+        wallet_a=wallets.merchant_wallet,
+        wallet_b=wallets.buyer_wallet("rlusd"),
+    )
+    consolidate_rlusd_to_wallet_a(client, settle_pair, issuer)
+    assert get_validated_trustline_balance(client, settle_pair.wallet_a.classic_address, issuer) >= (
         receiver_balance_after - receiver_balance_before
     )
-    assert get_validated_trustline_balance(client, wallets.wallet_b.classic_address, issuer) == Decimal(
+    assert get_validated_trustline_balance(client, settle_pair.wallet_b.classic_address, issuer) == Decimal(
         "0"
     )
 
@@ -236,10 +242,10 @@ def test_live_usdc_payment_round_trip() -> None:
     rpc_url = resolve_live_testnet_rpc_url()
     client = JsonRpcClient(rpc_url)
     issuer = os.environ.get(USDC_TESTNET_ISSUER_ENV, DEFAULT_USDC_TESTNET_ISSUER)
-    wallets = get_live_wallet_pair(client)
-    recover_tracked_usdc_claim_wallets(client, wallets.wallet_a, issuer)
+    wallets = get_demo_wallet_set(client)
+    recover_tracked_usdc_claim_wallets(client, wallets.merchant_wallet, issuer)
 
-    for wallet in wallets.as_list():
+    for wallet in (wallets.merchant_wallet, wallets.buyer_wallet("usdc")):
         ensure_usdc_trustline(client, wallet, issuer)
 
     sender, receiver = _select_usdc_wallets(
@@ -317,11 +323,15 @@ def test_live_usdc_payment_round_trip() -> None:
     assert normalize_currency_code(str(ledger_amount["currency"])) == "USDC"
     assert ledger_amount["issuer"] == issuer
     assert Decimal(str(ledger_amount["value"])) == USDC_PAYMENT_VALUE
-    consolidate_usdc_to_wallet_a(client, wallets, issuer)
-    assert get_validated_usdc_trustline_balance(client, wallets.wallet_a.classic_address, issuer) >= (
+    settle_pair = LiveWalletPair(
+        wallet_a=wallets.merchant_wallet,
+        wallet_b=wallets.buyer_wallet("usdc"),
+    )
+    consolidate_usdc_to_wallet_a(client, settle_pair, issuer)
+    assert get_validated_usdc_trustline_balance(client, settle_pair.wallet_a.classic_address, issuer) >= (
         receiver_balance_after - receiver_balance_before
     )
-    assert get_validated_usdc_trustline_balance(client, wallets.wallet_b.classic_address, issuer) == Decimal(
+    assert get_validated_usdc_trustline_balance(client, settle_pair.wallet_b.classic_address, issuer) == Decimal(
         "0"
     )
 
@@ -349,7 +359,7 @@ def _select_xrp_wallets(
 
 def _select_rlusd_wallets(
     client: JsonRpcClient,
-    wallets: LiveWalletPair,
+    wallets: DemoWalletSet,
     issuer: str,
 ) -> tuple[Wallet, Wallet]:
     sender, receiver = _wallet_with_rlusd_liquidity(client, wallets, issuer)
@@ -364,12 +374,12 @@ def _select_rlusd_wallets(
 
 def _wallet_with_rlusd_liquidity(
     client: JsonRpcClient,
-    wallets: LiveWalletPair,
+    wallets: DemoWalletSet,
     issuer: str,
 ) -> tuple[Wallet | None, Wallet | None]:
     wallet_balances = [
         (wallet, get_validated_trustline_balance(client, wallet.classic_address, issuer))
-        for wallet in wallets.as_list()
+        for wallet in (wallets.merchant_wallet, wallets.buyer_wallet("rlusd"))
     ]
     wallet_balances.sort(key=lambda entry: entry[1], reverse=True)
     sender, sender_balance = wallet_balances[0]
@@ -381,7 +391,7 @@ def _wallet_with_rlusd_liquidity(
 
 def _select_usdc_wallets(
     client: JsonRpcClient,
-    wallets: LiveWalletPair,
+    wallets: DemoWalletSet,
     issuer: str,
 ) -> tuple[Wallet, Wallet]:
     sender, receiver = _wallet_with_usdc_liquidity(client, wallets, issuer)
@@ -396,12 +406,12 @@ def _select_usdc_wallets(
 
 def _wallet_with_usdc_liquidity(
     client: JsonRpcClient,
-    wallets: LiveWalletPair,
+    wallets: DemoWalletSet,
     issuer: str,
 ) -> tuple[Wallet | None, Wallet | None]:
     wallet_balances = [
         (wallet, get_validated_usdc_trustline_balance(client, wallet.classic_address, issuer))
-        for wallet in wallets.as_list()
+        for wallet in (wallets.merchant_wallet, wallets.buyer_wallet("usdc"))
     ]
     wallet_balances.sort(key=lambda entry: entry[1], reverse=True)
     sender, sender_balance = wallet_balances[0]

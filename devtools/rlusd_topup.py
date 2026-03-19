@@ -10,7 +10,7 @@ from devtools.live_testnet_support import (
     TRYRLUSD_SESSION_TOKEN_ENV,
     claim_rlusd_topup,
     default_rlusd_issuer,
-    get_live_wallet_pair,
+    get_demo_wallet_set,
     resolve_live_testnet_rpc_url,
 )
 
@@ -32,7 +32,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         client = JsonRpcClient(resolve_live_testnet_rpc_url(args.xrpl_rpc_url))
-        wallets = get_live_wallet_pair(client)
+        wallets = get_demo_wallet_set(client)
         issuer = default_rlusd_issuer()
         result = claim_rlusd_topup(
             client,
@@ -47,8 +47,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(result.message)
     print(f"Claim state: {result.claim_state_path}")
     print(f"Canonical wallet: {result.canonical_wallet_address}")
+    if result.buyer_wallet_address is not None:
+        print(f"Buyer wallet: {result.buyer_wallet_address}")
     if result.swept_amount > 0:
         print(f"Recovered {result.swept_amount} RLUSD into the accumulator wallet.")
+    if result.bridged_amount > 0:
+        print(f"Funded {result.bridged_amount} RLUSD into the buyer wallet.")
     if result.deleted_wallets > 0:
         print(f"Deleted {result.deleted_wallets} disposable claim wallet(s).")
 

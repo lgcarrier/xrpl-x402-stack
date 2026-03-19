@@ -8,6 +8,17 @@ import devtools.live_testnet_support as support
 from xrpl.wallet import Wallet
 
 
+def build_demo_wallet_set() -> support.DemoWalletSet:
+    return support.DemoWalletSet(
+        merchant_wallet=Wallet.create(),
+        buyers={
+            "xrp": Wallet.create(),
+            "rlusd": Wallet.create(),
+            "usdc": Wallet.create(),
+        },
+    )
+
+
 def test_load_rlusd_claim_state_migrates_v1_payload(tmp_path) -> None:
     claim_state_path = tmp_path / "rlusd-claim-state.json"
     claim_state_path.write_text(
@@ -38,6 +49,60 @@ def test_load_rlusd_claim_state_migrates_v1_payload(tmp_path) -> None:
     )
     assert state.last_successful_session_claim_tx_hash == "CLAIMHASH"
     assert state.claim_wallets == []
+
+
+def test_get_demo_wallet_set_upgrades_v1_cache_and_preserves_xrp_pair(tmp_path, monkeypatch) -> None:
+    cache_path = tmp_path / "xrpl-testnet-wallets.json"
+    merchant_wallet = Wallet.create()
+    xrp_buyer_wallet = Wallet.create()
+    rlusd_buyer_wallet = Wallet.create()
+    usdc_buyer_wallet = Wallet.create()
+    cache_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "wallet_a": {
+                    "classic_address": merchant_wallet.classic_address,
+                    "seed": merchant_wallet.seed,
+                },
+                "wallet_b": {
+                    "classic_address": xrp_buyer_wallet.classic_address,
+                    "seed": xrp_buyer_wallet.seed,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(support, "wallet_cache_path", lambda: cache_path)
+    monkeypatch.setattr(support, "_account_exists", lambda _client, _address: True)
+    generated_wallets = {
+        f"{support.DEMO_WALLET_USAGE_CONTEXT_PREFIX}-buyer-rlusd": rlusd_buyer_wallet,
+        f"{support.DEMO_WALLET_USAGE_CONTEXT_PREFIX}-buyer-usdc": usdc_buyer_wallet,
+    }
+    monkeypatch.setattr(
+        support,
+        "generate_faucet_wallet",
+        lambda _client, usage_context: generated_wallets[usage_context],
+    )
+
+    demo_wallets = support.get_demo_wallet_set(client="client")
+    live_pair = support.get_live_wallet_pair(client="client")
+    cached_demo_wallets = support.load_cached_demo_wallet_set(cache_path)
+    payload = json.loads(cache_path.read_text(encoding="utf-8"))
+
+    assert demo_wallets.merchant_wallet.classic_address == merchant_wallet.classic_address
+    assert demo_wallets.buyer_wallet("xrp").classic_address == xrp_buyer_wallet.classic_address
+    assert demo_wallets.buyer_wallet("rlusd").classic_address == rlusd_buyer_wallet.classic_address
+    assert demo_wallets.buyer_wallet("usdc").classic_address == usdc_buyer_wallet.classic_address
+    assert cached_demo_wallets is not None
+    assert live_pair.wallet_a.classic_address == merchant_wallet.classic_address
+    assert live_pair.wallet_b.classic_address == xrp_buyer_wallet.classic_address
+    assert payload["version"] == 2
+    assert payload["merchant"]["classic_address"] == merchant_wallet.classic_address
+    assert payload["buyers"]["xrp"]["classic_address"] == xrp_buyer_wallet.classic_address
+    assert payload["buyers"]["rlusd"]["classic_address"] == rlusd_buyer_wallet.classic_address
+    assert payload["buyers"]["usdc"]["classic_address"] == usdc_buyer_wallet.classic_address
 
 
 def test_recover_tracked_claim_wallets_sweeps_and_deletes_wallet(tmp_path, monkeypatch) -> None:
@@ -236,6 +301,135 @@ def test_claim_rlusd_topup_returns_missing_token_after_recovery(tmp_path, monkey
     assert result.swept_amount == Decimal("3.25")
     assert result.deleted_wallets == 2
     assert faucet_called["value"] is False
+
+
+def test_claim_rlusd_topup_bridges_accumulator_balance_to_rlusd_buyer(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    claim_state_path = tmp_path / "rlusd-claim-state.json"
+    wallet_set = build_demo_wallet_set()
+    now = datetime(2026, 3, 12, 15, 0, tzinfo=timezone.utc)
+    balances = {
+        wallet_set.merchant_wallet.classic_address: Decimal("3.25"),
+        wallet_set.buyer_wallet("rlusd").classic_address: Decimal("0"),
+    }
+    ensure_calls: list[str] = []
+
+    monkeypatch.setattr(
+        support,
+        "recover_tracked_claim_wallets",
+        lambda _client, _accumulator_wallet, _issuer, claim_state_file=None, now=None: (
+            support.RLUSDClaimState(
+                canonical_wallet_address=wallet_set.merchant_wallet.classic_address,
+                issuer="rIssuer",
+            ),
+            support.ClaimWalletRecoverySummary(
+                recovered_rlusd_amount=Decimal("3.25"),
+                deleted_wallets=1,
+                processed_wallets=1,
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        support,
+        "ensure_rlusd_trustline",
+        lambda _client, wallet, _issuer, limit_value="100000": ensure_calls.append(
+            wallet.classic_address
+        )
+        or None,
+    )
+    monkeypatch.setattr(
+        support,
+        "get_validated_trustline_balance",
+        lambda _client, address, _issuer, currency_code=support.RLUSD_CODE: balances.get(
+            address, Decimal("0")
+        ),
+    )
+
+    def fake_submit_payment(_client, wallet, destination_address, _issuer, amount):
+        balances[wallet.classic_address] -= amount
+        balances[destination_address] = balances.get(destination_address, Decimal("0")) + amount
+        return "BRIDGETX"
+
+    monkeypatch.setattr(support, "submit_validated_rlusd_payment", fake_submit_payment)
+    monkeypatch.setattr(
+        support,
+        "wait_for_trustline_balance_increase",
+        lambda _client, _address, _issuer, *, starting_balance, increase, timeout_seconds=30, currency_code=support.RLUSD_CODE: starting_balance
+        + increase,
+    )
+
+    result = support.claim_rlusd_topup(
+        client=None,
+        wallets=wallet_set,
+        issuer="rIssuer",
+        session_token=None,
+        now=now,
+        claim_state_file=claim_state_path,
+    )
+
+    assert result.status == "missing_token"
+    assert result.buyer_wallet_address == wallet_set.buyer_wallet("rlusd").classic_address
+    assert result.bridged_amount == Decimal("3.25")
+    assert balances[wallet_set.merchant_wallet.classic_address] == Decimal("0")
+    assert balances[wallet_set.buyer_wallet("rlusd").classic_address] == Decimal("3.25")
+    assert ensure_calls == [
+        wallet_set.merchant_wallet.classic_address,
+        wallet_set.buyer_wallet("rlusd").classic_address,
+    ]
+
+
+def test_claim_rlusd_topup_returns_hard_failure_when_buyer_bridge_fails(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    claim_state_path = tmp_path / "rlusd-claim-state.json"
+    wallet_set = build_demo_wallet_set()
+    balances = {
+        wallet_set.merchant_wallet.classic_address: Decimal("4.50"),
+        wallet_set.buyer_wallet("rlusd").classic_address: Decimal("0"),
+    }
+
+    monkeypatch.setattr(
+        support,
+        "recover_tracked_claim_wallets",
+        lambda _client, _accumulator_wallet, _issuer, claim_state_file=None, now=None: (
+            support.RLUSDClaimState(
+                canonical_wallet_address=wallet_set.merchant_wallet.classic_address,
+                issuer="rIssuer",
+            ),
+            support.ClaimWalletRecoverySummary(recovered_rlusd_amount=Decimal("4.50")),
+        ),
+    )
+    monkeypatch.setattr(support, "ensure_rlusd_trustline", lambda _client, _wallet, _issuer, limit_value="100000": None)
+    monkeypatch.setattr(
+        support,
+        "get_validated_trustline_balance",
+        lambda _client, address, _issuer, currency_code=support.RLUSD_CODE: balances.get(
+            address, Decimal("0")
+        ),
+    )
+    monkeypatch.setattr(
+        support,
+        "submit_validated_rlusd_payment",
+        lambda _client, _wallet, _destination_address, _issuer, _amount: (_ for _ in ()).throw(
+            RuntimeError("bridge tx failed")
+        ),
+    )
+
+    result = support.claim_rlusd_topup(
+        client=None,
+        wallets=wallet_set,
+        issuer="rIssuer",
+        session_token=None,
+        claim_state_file=claim_state_path,
+    )
+
+    assert result.status == "bridge_failed"
+    assert result.buyer_wallet_address == wallet_set.buyer_wallet("rlusd").classic_address
+    assert "Failed to fund buyer wallet" in result.message
+    assert "4.50 RLUSD remain on accumulator wallet" in result.message
 
 
 def test_claim_rlusd_topup_creates_disposable_wallet_and_persists_success(
@@ -612,3 +806,75 @@ def test_prepare_usdc_topup_creates_claim_wallet_and_persists_manual_instruction
     assert record.classic_address == disposable_wallet.classic_address
     assert record.trustline_create_tx_hash == "TRUSTTX"
     assert record.status == support.CLAIM_WALLET_STATUS_AWAITING_MANUAL_FUNDING
+
+
+def test_prepare_usdc_topup_bridges_accumulator_balance_to_usdc_buyer(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    claim_state_path = tmp_path / "usdc-claim-state.json"
+    wallet_set = build_demo_wallet_set()
+    previous_claim_at = datetime(2026, 3, 12, 13, 30, tzinfo=timezone.utc)
+    now = datetime(2026, 3, 12, 15, 0, tzinfo=timezone.utc)
+    balances = {
+        wallet_set.merchant_wallet.classic_address: Decimal("2.25"),
+        wallet_set.buyer_wallet("usdc").classic_address: Decimal("0"),
+    }
+    ensure_calls: list[str] = []
+
+    monkeypatch.setattr(
+        support,
+        "recover_tracked_usdc_claim_wallets",
+        lambda _client, _accumulator_wallet, _issuer, claim_state_file=None, now=None: (
+            support.USDCClaimState(
+                canonical_wallet_address=wallet_set.merchant_wallet.classic_address,
+                issuer="rIssuer",
+                last_successful_session_claim_at=previous_claim_at,
+            ),
+            support.USDCClaimRecoverySummary(recovered_usdc_amount=Decimal("2.25")),
+        ),
+    )
+    monkeypatch.setattr(
+        support,
+        "ensure_usdc_trustline",
+        lambda _client, wallet, _issuer, limit_value="100000": ensure_calls.append(
+            wallet.classic_address
+        )
+        or None,
+    )
+    monkeypatch.setattr(
+        support,
+        "get_validated_usdc_trustline_balance",
+        lambda _client, address, _issuer: balances.get(address, Decimal("0")),
+    )
+
+    def fake_submit_payment(_client, wallet, destination_address, _issuer, amount):
+        balances[wallet.classic_address] -= amount
+        balances[destination_address] = balances.get(destination_address, Decimal("0")) + amount
+        return "BRIDGETX"
+
+    monkeypatch.setattr(support, "submit_validated_usdc_payment", fake_submit_payment)
+    monkeypatch.setattr(
+        support,
+        "wait_for_trustline_balance_increase",
+        lambda _client, _address, _issuer, *, starting_balance, increase, timeout_seconds=30, currency_code=support.USDC_CODE: starting_balance
+        + increase,
+    )
+
+    result = support.prepare_usdc_topup(
+        client=None,
+        wallets=wallet_set,
+        issuer="rIssuer",
+        now=now,
+        claim_state_file=claim_state_path,
+    )
+
+    assert result.status == "cooldown"
+    assert result.buyer_wallet_address == wallet_set.buyer_wallet("usdc").classic_address
+    assert result.bridged_amount == Decimal("2.25")
+    assert balances[wallet_set.merchant_wallet.classic_address] == Decimal("0")
+    assert balances[wallet_set.buyer_wallet("usdc").classic_address] == Decimal("2.25")
+    assert ensure_calls == [
+        wallet_set.merchant_wallet.classic_address,
+        wallet_set.buyer_wallet("usdc").classic_address,
+    ]
