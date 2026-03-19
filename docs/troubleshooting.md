@@ -72,6 +72,21 @@ The full rule set is documented in [Replay And Freshness](how-it-works/replay-an
 
 Rerun `python -m devtools.rlusd_topup` later. The helper records local cooldown state under `.live-test-wallets/rlusd-claim-state.json`.
 
+## Issued-asset demo fails with `tecPATH_DRY` or the buyer wallet is unfunded
+
+If the demo trace shows the shared merchant wallet holding RLUSD or USDC while
+the buyer wallet has `0`, the derived env file is using the dedicated issued-asset
+buyer seed but that wallet has not been funded yet.
+
+Recover and bridge funds, then rerun the demo:
+
+- RLUSD: `python -m devtools.rlusd_topup`
+- USDC: `python -m devtools.usdc_topup`
+
+The helpers recover tracked claim wallets, sweep funds back into the shared
+merchant wallet, and then fund the dedicated buyer wallet that
+`.env.quickstart.rlusd` or `.env.quickstart.usdc` points at.
+
 ## USDC does not appear after the Circle faucet claim
 
 Rerun `python -m devtools.usdc_topup` after the faucet transfer is visible on XRPL Testnet. The helper is designed to recover and sweep later claims.

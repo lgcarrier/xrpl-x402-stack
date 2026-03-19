@@ -5,6 +5,7 @@ from decimal import Decimal
 import importlib
 
 import httpx
+import pytest
 from fastapi import FastAPI
 from slowapi import Limiter as SlowLimiter
 from xrpl.wallet import Wallet
@@ -383,3 +384,92 @@ def test_demo_trace_renders_recording_friendly_summary(monkeypatch) -> None:
     assert "Wallet A: XRP +0.000000, RLUSD +1.25" in output
     assert "Wallet B: XRP -0.000012, RLUSD -1.25" in output
     assert f"tx hash: {TX_HASH}" in output
+
+
+def test_demo_trace_blocks_unfunded_issued_asset_buyer(monkeypatch) -> None:
+    demo_trace = importlib.import_module("devtools.demo_trace")
+    demo_trace = importlib.reload(demo_trace)
+
+    buyer_wallet = Wallet.create()
+    signer = demo_trace.XRPLPaymentSigner(
+        buyer_wallet,
+        network="xrpl:1",
+        autofill_enabled=False,
+    )
+    destination = DESTINATION
+
+    challenge = demo_trace.PaymentRequired(
+        error="Payment required",
+        accepts=[
+            demo_trace.XRPLPaymentOption(
+                network="xrpl:1",
+                payTo=destination,
+                maxAmountRequired="1.25",
+                asset=demo_trace.XRPLAsset(code="RLUSD", issuer=RLUSD_TESTNET_ISSUER),
+                amount=XRPLAmount(value="1.25", unit="issued"),
+                description="premium access",
+            )
+        ],
+    )
+
+    xrp_balances = {
+        destination: 2_000_000,
+        buyer_wallet.classic_address: 10_000_000,
+    }
+    rlusd_balances = {
+        destination: Decimal("30"),
+        buyer_wallet.classic_address: Decimal("0"),
+    }
+    requests = {"paid": 0}
+    printed_sections: list[str] = []
+
+    def fake_get_validated_balance(_client, address: str) -> int:
+        return xrp_balances[address]
+
+    def fake_get_validated_trustline_balance(
+        _client,
+        address: str,
+        issuer: str,
+        *,
+        currency_code: str = "RLUSD",
+    ) -> Decimal:
+        assert issuer == RLUSD_TESTNET_ISSUER
+        assert currency_code == "RLUSD"
+        return rlusd_balances[address]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if PAYMENT_SIGNATURE_HEADER in request.headers:
+            requests["paid"] += 1
+            return httpx.Response(500, request=request)
+        return httpx.Response(
+            402,
+            headers={PAYMENT_REQUIRED_HEADER: demo_trace.encode_model_to_base64(challenge)},
+            request=request,
+        )
+
+    monkeypatch.setattr(demo_trace, "get_validated_balance", fake_get_validated_balance)
+    monkeypatch.setattr(
+        demo_trace,
+        "get_validated_trustline_balance",
+        fake_get_validated_trustline_balance,
+    )
+
+    with pytest.raises(
+        demo_trace.DemoPreflightError,
+        match="Buyer wallet .* only has 0 RLUSD",
+    ):
+        asyncio.run(
+            demo_trace.run_demo_trace(
+                signer=signer,
+                rpc_client=object(),
+                target_url="http://merchant.local/premium",
+                payment_asset=f"RLUSD:{RLUSD_TESTNET_ISSUER}",
+                timeout_seconds=1.0,
+                transport=httpx.MockTransport(handler),
+                printer=printed_sections.append,
+            )
+        )
+
+    assert requests["paid"] == 0
+    assert any("Preflight check" in section for section in printed_sections)
+    assert any("python -m devtools.rlusd_topup" in section for section in printed_sections)

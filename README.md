@@ -70,6 +70,9 @@ helper and start at `python -m devtools.demo_env --asset rlusd`. See the
 [RLUSD guide](docs/asset-guides/rlusd.md) for the full faucet and recovery flow.
 `devtools.demo_env --asset rlusd` now writes the RLUSD buyer seed into
 `.env.quickstart.rlusd` so the RLUSD run signs with its own wallet.
+If the demo trace shows the shared merchant wallet holding RLUSD while the
+buyer wallet has `0`, rerun `python -m devtools.rlusd_topup` to bridge funds
+into the dedicated RLUSD buyer wallet before retrying the demo.
 
 ### USDC
 
@@ -89,6 +92,9 @@ helper and start at `python -m devtools.demo_env --asset usdc`. See the
 [USDC guide](docs/asset-guides/usdc.md) for the full faucet and recovery flow.
 `devtools.demo_env --asset usdc` now writes the USDC buyer seed into
 `.env.quickstart.usdc` so the USDC run signs with its own wallet.
+If the demo trace shows the shared merchant wallet holding USDC while the
+buyer wallet has `0`, rerun `python -m devtools.usdc_topup` to bridge funds
+into the dedicated USDC buyer wallet before retrying the demo.
 
 ## Full AI Agent Support
 

@@ -43,6 +43,14 @@ DEFAULT_RPC_URL = "https://s.altnet.rippletest.net:51234"
 DEFAULT_TARGET_URL = "http://127.0.0.1:8010/premium"
 DEFAULT_TIMEOUT_SECONDS = 30.0
 XRP_DROPS_PER_XRP = Decimal("1000000")
+ISSUED_ASSET_TOPUP_COMMANDS = {
+    "RLUSD": "python -m devtools.rlusd_topup",
+    "USDC": "python -m devtools.usdc_topup",
+}
+
+
+class DemoPreflightError(RuntimeError):
+    """Raised when the demo wallet state cannot satisfy the requested payment."""
 
 
 @dataclass(frozen=True)
@@ -222,6 +230,43 @@ def _emit(printer: Callable[[str], None] | None, text: str) -> None:
         printer(text)
 
 
+def build_preflight_error(
+    *,
+    option: XRPLPaymentOption,
+    wallet_a: WalletSnapshot,
+    wallet_b: WalletSnapshot,
+) -> str | None:
+    if option.asset.issuer is None or option.amount.unit == "drops":
+        return None
+
+    required_amount = Decimal(option.amount.value)
+    buyer_balance = wallet_b.asset_balance or Decimal("0")
+    if buyer_balance >= required_amount:
+        return None
+
+    asset_code = option.asset.code
+    message = (
+        f"Buyer wallet {wallet_b.address} only has {format_decimal(buyer_balance)} {asset_code}, "
+        f"but this demo needs {format_decimal(required_amount)} {asset_code}."
+    )
+    merchant_balance = wallet_a.asset_balance
+    if merchant_balance is not None and merchant_balance > 0:
+        message += (
+            f" Merchant wallet {wallet_a.address} currently holds "
+            f"{format_decimal(merchant_balance)} {asset_code}."
+        )
+
+    topup_command = ISSUED_ASSET_TOPUP_COMMANDS.get(asset_code.upper())
+    if topup_command is not None:
+        message += (
+            f" Run `{topup_command}` to fund the dedicated {asset_code} buyer wallet, "
+            "then retry the demo."
+        )
+    else:
+        message += " Fund the buyer wallet before retrying the demo."
+    return message
+
+
 async def run_demo_trace(
     *,
     signer: XRPLPaymentSigner,
@@ -282,6 +327,14 @@ async def run_demo_trace(
                 asset=option.asset,
             ),
         )
+        preflight_error = build_preflight_error(
+            option=option,
+            wallet_a=wallet_a_before,
+            wallet_b=wallet_b_before,
+        )
+        if preflight_error is not None:
+            _emit(printer, render_preflight_blocked_section(preflight_error))
+            raise DemoPreflightError(preflight_error)
 
         _emit(printer, "Step 3: Signing the XRPL payment...")
         active_invoice_id = invoice_id or generate_invoice_id(signer.wallet.classic_address)
@@ -418,6 +471,16 @@ def render_signing_section(*, invoice_id: str, fee_drops: int) -> str:
             "Payment being signed",
             f"  invoice id: {invoice_id}",
             f"  XRPL fee: {fee_drops} drops ({format_xrp_balance(fee_drops)} XRP)",
+        ]
+    )
+
+
+def render_preflight_blocked_section(detail: str) -> str:
+    return "\n".join(
+        [
+            "Preflight check",
+            "  status: blocked",
+            f"  detail: {detail}",
         ]
     )
 
@@ -571,17 +634,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     signer = build_signer(config)
     rpc_client = JsonRpcClient(config.rpc_url)
-    asyncio.run(
-        run_demo_trace(
-            signer=signer,
-            rpc_client=rpc_client,
-            target_url=config.target_url,
-            payment_asset=config.payment_asset,
-            timeout_seconds=config.timeout_seconds,
-            invoice_id=config.invoice_id,
-            printer=lambda text: print(text, flush=True),
+    try:
+        asyncio.run(
+            run_demo_trace(
+                signer=signer,
+                rpc_client=rpc_client,
+                target_url=config.target_url,
+                payment_asset=config.payment_asset,
+                timeout_seconds=config.timeout_seconds,
+                invoice_id=config.invoice_id,
+                printer=lambda text: print(text, flush=True),
+            )
         )
-    )
+    except DemoPreflightError:
+        return 1
     return 0
 
 
