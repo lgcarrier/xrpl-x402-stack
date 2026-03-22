@@ -1,5 +1,7 @@
 # Open XRPL x402 Stack
 
+[![Docs](https://img.shields.io/badge/docs-live-0A7E3B)](https://lgcarrier.github.io/xrpl-x402-stack/)
+
 Python-first XRPL infrastructure for the open `x402` protocol.
 
 Hosted docs: <https://lgcarrier.github.io/xrpl-x402-stack/>
