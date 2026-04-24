@@ -2,6 +2,18 @@
 
 All notable changes to the Open XRPL x402 Stack are documented here.
 
+## xrpl-x402-facilitator 0.1.1
+
+- Updated published dependency metadata to use `xrpl-py==4.5.0`, allow `uvicorn>=0.30.6,<1`, and allow `python-dotenv>=1.0.1,<2` so facilitator installs can coexist with the payer MCP extra.
+
+## xrpl-x402-middleware 0.1.1
+
+- Constrained the Starlette dependency to `>=0.37,<0.39` to stay aligned with the FastAPI version used by the facilitator package.
+
+## xrpl-x402-payer 0.1.3
+
+- Constrained the Starlette dependency to `>=0.37,<0.39` so `xrpl-x402-payer[mcp]` can be installed alongside the facilitator without upgrading FastAPI's Starlette dependency out of range.
+
 ## xrpl-x402-core 0.1.2
 
 - Added `xrpl_currency_code(...)` as the shared helper for rendering XRPL issued-currency codes from 3-character, 20-byte ASCII, or 40-character hex asset identifiers.

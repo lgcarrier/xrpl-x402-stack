@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "xrpl-x402-middleware"
-version = "0.1.0"
+version = "0.1.1"
 description = "ASGI middleware for XRPL-backed x402 API payments"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.12"
@@ -25,7 +25,7 @@ classifiers = [
 dependencies = [
   "httpx==0.28.1",
   "pydantic>=2,<3",
-  "starlette>=0.37,<1",
+  "starlette>=0.37,<0.39",
   "xrpl-x402-core>=0.1.0,<0.2.0",
 ]
 

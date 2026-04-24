@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "xrpl-x402-facilitator"
-version = "0.1.0"
+version = "0.1.1"
 description = "FastAPI facilitator service for XRPL-backed x402 payments"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.12"
@@ -26,7 +26,7 @@ classifiers = [
 dependencies = [
   "fastapi==0.115.0",
   "pydantic-settings==2.6.1",
-  "python-dotenv==1.0.1",
+  "python-dotenv>=1.0.1,<2",
   "redis==5.2.1",
   "slowapi==0.1.9",
   "structlog==24.4.0",
