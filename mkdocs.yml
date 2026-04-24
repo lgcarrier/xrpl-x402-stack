@@ -8,7 +8,7 @@ copyright: >-
   <a href="https://github.com/lgcarrier/xrpl-x402-stack" class="footer-badge-link">
     <img alt="GitHub xrpl-x402-stack" src="https://img.shields.io/badge/GitHub-xrpl--x402--stack-181717?logo=github&logoColor=white">
   </a>
-  <img alt="Docs version 0.1.0" src="https://img.shields.io/badge/docs-v0.1.0-0A7E3B">
+  <img alt="Docs current" src="https://img.shields.io/badge/docs-current-0A7E3B">
 
 theme:
   name: material

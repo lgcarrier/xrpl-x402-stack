@@ -9,7 +9,7 @@ Hosted docs for the XRPL-first x402 stack:
 - `xrpl-x402-payer`
 
 [![GitHub repository](https://img.shields.io/badge/GitHub-xrpl--x402--stack-181717?logo=github&logoColor=white)](https://github.com/lgcarrier/xrpl-x402-stack)
-[![Docs version](https://img.shields.io/badge/docs-v0.1.0-0A7E3B)](release.md)
+[![Docs status](https://img.shields.io/badge/docs-current-0A7E3B)](release.md)
 
 ## Start Here
 

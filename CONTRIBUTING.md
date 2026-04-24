@@ -38,18 +38,19 @@ mkdocs build --strict
 
 ## Package Releases
 
-This repo publishes four packages independently:
+This repo publishes five packages independently:
 
 - `xrpl-x402-core`
 - `xrpl-x402-facilitator`
 - `xrpl-x402-middleware`
 - `xrpl-x402-client`
+- `xrpl-x402-payer`
 
 Recommended verification before publishing:
 
 ```bash
 pytest -q
-for package in packages/core packages/facilitator packages/middleware packages/client; do
+for package in packages/core packages/facilitator packages/middleware packages/client packages/payer; do
   (
     cd "$package"
     python -m build --sdist
@@ -68,12 +69,13 @@ Release flow:
 
 - Follow [docs/release.md](docs/release.md) for the full trusted-publishing setup and release playbook.
 - Run the `Publish Python Package` workflow manually for a TestPyPI rehearsal.
-- Publish `core` first, wait for index availability, then publish `facilitator`, `middleware`, and `client`.
+- Publish `core` first, wait for index availability, then publish `facilitator`, `middleware`, `client`, and `payer`.
 - Push one of these tag prefixes to publish to PyPI:
   - `core-v*`
   - `facilitator-v*`
   - `middleware-v*`
   - `client-v*`
+  - `payer-v*`
 
 ## Project Expectations
 
