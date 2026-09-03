@@ -1,4 +1,6 @@
+import tomllib
 from importlib.resources import files
+from pathlib import Path
 
 from xrpl_x402_client import (
     ExactXRPLClientScheme,
@@ -61,3 +63,16 @@ def test_typed_packages_ship_pep_561_markers() -> None:
         "xrpl_x402_payer",
     ):
         assert files(package).joinpath("py.typed").is_file()
+
+
+def test_middleware_declares_the_upstream_fastapi_runtime_extra() -> None:
+    repository_root = Path(__file__).resolve().parents[1]
+    pyproject = tomllib.loads(
+        (repository_root / "packages/middleware/pyproject.toml").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert "x402[extensions,fastapi]==2.21.0" in pyproject["project"][
+        "dependencies"
+    ]

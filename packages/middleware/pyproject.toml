@@ -27,7 +27,7 @@ dependencies = [
   "pydantic>=2,<3",
   "redis==5.2.1",
   "starlette>=0.37,<0.39",
-  "x402[extensions]==2.21.0",
+  "x402[extensions,fastapi]==2.21.0",
   "xrpl-x402-core==0.2.0",
 ]
 
