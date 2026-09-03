@@ -76,3 +76,21 @@ def test_middleware_declares_the_upstream_fastapi_runtime_extra() -> None:
     assert "x402[extensions,fastapi]==2.21.0" in pyproject["project"][
         "dependencies"
     ]
+
+
+def test_testpypi_verifier_isolates_third_party_dependencies() -> None:
+    repository_root = Path(__file__).resolve().parents[1]
+    workflow = (
+        repository_root / ".github/workflows/publish-package.yml"
+    ).read_text(encoding="utf-8")
+    publish_section, remainder = workflow.split(
+        "  verify-testpypi-install:\n", maxsplit=1
+    )
+    verify_section = remainder.split("  publish-pypi:\n", maxsplit=1)[0]
+
+    assert "skip-existing: true" in publish_section
+    assert "--no-deps" in verify_section
+    assert "--only-binary=:all:" in verify_section
+    assert '--index-url "$PYPI_INDEX_URL"' in verify_section
+    assert '--find-links "$WHEELHOUSE"' in verify_section
+    assert "--extra-index-url" not in verify_section
