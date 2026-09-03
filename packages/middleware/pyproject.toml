@@ -27,12 +27,12 @@ dependencies = [
   "pydantic>=2,<3",
   "redis==5.2.1",
   "starlette>=0.37,<0.39",
-  "x402[extensions]==2.20.0",
+  "x402[extensions]==2.21.0",
   "xrpl-x402-core==0.2.0",
 ]
 
 [project.optional-dependencies]
-mcp = ["mcp>=1,<2", "x402[mcp]==2.20.0"]
+mcp = ["mcp>=1,<2", "x402[mcp]==2.21.0"]
 
 [project.urls]
 Homepage = "https://github.com/lgcarrier/xrpl-x402-stack"

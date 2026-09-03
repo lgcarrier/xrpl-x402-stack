@@ -68,6 +68,9 @@ class ExactXRPLExtra(StrictModel):
     asset_transfer_method: str | None = Field(
         default=None, alias="assetTransferMethod"
     )
+    payment_flow: Literal["authorization"] | None = Field(
+        default=None, alias="paymentFlow"
+    )
     invoice_id: str | None = Field(
         default=None, alias="invoiceId", max_length=INVOICE_ID_MAX_LENGTH
     )

@@ -1,7 +1,7 @@
 # Release 0.2.0
 
 All five packages are released together at 0.2.0. The stable protocol runtime
-is exactly `x402==2.20.0`; do not relax this pin in release artifacts.
+is exactly `x402==2.21.0`; do not relax this pin in release artifacts.
 
 ## Required validation
 

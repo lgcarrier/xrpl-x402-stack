@@ -1,7 +1,7 @@
 # Open XRPL x402 Stack 0.2.0
 
 This project supplies the missing Python XRPL mechanisms for the official x402
-2.20.0 runtime. It supports canonical protocol v2 only.
+2.21.0 runtime. It supports canonical protocol v2 only.
 
 ## Components
 

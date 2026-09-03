@@ -29,14 +29,14 @@ dependencies = [
   "starlette>=0.37,<0.39",
   "typer>=0.12,<1",
   "uvicorn>=0.30.6,<1",
-  "x402[extensions]==2.20.0",
+  "x402[extensions]==2.21.0",
   "xrpl-py==4.5.0",
   "xrpl-x402-client==0.2.0",
   "xrpl-x402-core==0.2.0",
 ]
 
 [project.optional-dependencies]
-mcp = ["mcp>=1,<2", "x402[mcp]==2.20.0"]
+mcp = ["mcp>=1,<2", "x402[mcp]==2.21.0"]
 
 [project.scripts]
 xrpl-x402 = "xrpl_x402_payer.cli:main"

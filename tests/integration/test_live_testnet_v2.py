@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from decimal import Decimal
 import os
+import re
 from typing import Any
 
 import pytest
 from x402.schemas import PaymentPayload, PaymentRequirements
 from xrpl.clients import JsonRpcClient
+from xrpl.models.requests import Tx
 
 from devtools.live_testnet_support import (
     LIVE_TEST_FLAG,
@@ -22,7 +24,11 @@ from devtools.live_testnet_support import (
     resolve_live_testnet_rpc_url,
 )
 from xrpl_x402_client import XRPLPaymentSigner
-from xrpl_x402_core import RLUSD_HEX, USDC_HEX
+from xrpl_x402_core import (
+    RLUSD_HEX,
+    USDC_HEX,
+    invoice_id_to_invoice_id_field,
+)
 from xrpl_x402_facilitator.config import Settings
 from xrpl_x402_facilitator.replay_store import InMemorySettlementStore
 from xrpl_x402_facilitator.xrpl_service import ExactXRPLFacilitatorScheme
@@ -78,7 +84,7 @@ def test_live_testnet_rlusd_exact_v2(transfer_method: str) -> None:
     if get_validated_trustline_balance(
         client, candidates[0].classic_address, issuer
     ) < Decimal("0.0001"):
-        pytest.skip("RLUSD Testnet wallet is not funded; run devtools.rlusd_topup")
+        pytest.skip("RLUSD Testnet wallet is not funded; run devtools.rlusd_fund")
     _exercise_payment(
         client=client,
         rpc_url=rpc_url,
@@ -183,3 +189,43 @@ def _exercise_payment(
     assert settled.transaction
     assert settled.network == "xrpl:1"
     assert settled.extra == {"status": "validated"}
+
+    transaction_hash = settled.transaction
+    assert re.fullmatch(r"[0-9A-Fa-f]{64}", transaction_hash)
+    ledger_response = client.request(Tx(transaction=transaction_hash))
+    assert ledger_response.is_successful(), ledger_response.result
+    ledger_result = ledger_response.result
+    ledger_transaction = ledger_result.get("tx_json", ledger_result)
+    assert ledger_result.get("validated") is True
+    assert ledger_result.get("meta", {}).get("TransactionResult") == "tesSUCCESS"
+    assert ledger_transaction.get("Account") == payer.classic_address
+    assert ledger_transaction.get("Destination") == pay_to
+    assert ledger_transaction.get("InvoiceID") == invoice_id_to_invoice_id_field(
+        extra["invoiceId"]
+    )
+
+    if transfer_method == "ticketSequence":
+        assert ledger_transaction.get("Sequence") == 0
+        assert int(ledger_transaction["TicketSequence"]) > 0
+    else:
+        assert int(ledger_transaction["Sequence"]) > 0
+        assert ledger_transaction.get("TicketSequence") is None
+
+    delivered_max = ledger_transaction.get(
+        "DeliverMax", ledger_transaction.get("Amount")
+    )
+    if asset == "XRP":
+        assert delivered_max == amount
+    else:
+        assert delivered_max == {
+            "currency": asset,
+            "issuer": issuer,
+            "value": amount,
+        }
+
+    print(
+        "validated acceptance"
+        f" asset={asset} method={transfer_method}"
+        f" tx={transaction_hash}"
+        f" ledger={ledger_result.get('ledger_index')}"
+    )

@@ -141,7 +141,7 @@ class InProcessFacilitatorClient(XRPLFacilitatorClient):
 
     def __init__(self, app: FastAPI, config: FacilitatorConfig) -> None:
         self._facilitator_app = app
-        super().__init__(config, pending_attempts=0)
+        super().__init__(config)
 
     def _get_sync_client(self) -> TestClient:
         return TestClient(

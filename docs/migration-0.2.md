@@ -4,7 +4,7 @@ Version 0.2.0 is an intentional clean break. Upgrade all five repository
 packages together and pin the official runtime:
 
 ```text
-x402==2.20.0
+x402==2.21.0
 xrpl-x402-core==0.2.0
 xrpl-x402-client==0.2.0
 xrpl-x402-middleware==0.2.0

@@ -132,7 +132,7 @@ def _preserve_pending_settlement_response(
     resource_context: ContextVar[AuthoritativeResource | None],
     authoritative_resource: AuthoritativeResource,
 ) -> Callable:
-    """Restore the standard response discarded by x402 2.20.0's MCP wrapper."""
+    """Preserve a still-pending receipt after upstream reconciliation."""
 
     @wraps(handler)
     async def wrapped(**kwargs: Any) -> Any:

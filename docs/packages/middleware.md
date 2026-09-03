@@ -26,8 +26,11 @@ app.add_middleware(
 ```
 
 The order is verify, handler, settlement, response. Streaming output is fully
-buffered. Handler failures and 4xx/5xx responses are not settled. Pending
-settlements retry with bounded backoff and never expose protected bytes.
+buffered. Handler failures and 4xx/5xx responses are not settled. For a
+`settlement_pending` result, the upstream x402 resource server retries the
+identical settlement envelope exactly once. If it remains pending, a later
+identical request resumes settlement from the cached protected response without
+rerunning the handler or exposing protected bytes early.
 
 Unsafe methods automatically require payment-identifier. A
 `RedisResourceResponseStore` preserves the successful handler output so a retry

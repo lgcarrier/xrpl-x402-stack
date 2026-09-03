@@ -1,6 +1,6 @@
 # Official x402 adapters
 
-The 0.2 stack composes the upstream x402 2.20.0 runtime instead of duplicating
+The 0.2 stack composes the upstream x402 2.21.0 runtime instead of duplicating
 transport models or codecs.
 
 - Client: `x402Client` and `x402AsyncTransport`

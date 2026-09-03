@@ -1,7 +1,7 @@
 # Open XRPL x402 Stack
 
 Python packages for canonical x402 v2 exact payments on the XRP Ledger. Release
-0.2.0 pins `x402==2.20.0` and implements the XRPL client, resource-server, and
+0.2.0 pins `x402==2.21.0` and implements the XRPL client, resource-server, and
 facilitator mechanisms where the upstream Python SDK has no XRPL mechanism.
 
 The stack is v2-only. It does not accept the 0.1 hybrid bodies, legacy field
@@ -26,8 +26,8 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-The exact runtime dependency is `x402[extensions]==2.20.0`. The middleware and
-payer MCP extras also pin `x402[mcp]==2.20.0` and MCP 1.x.
+The exact runtime dependency is `x402[extensions]==2.21.0`. The middleware and
+payer MCP extras also pin `x402[mcp]==2.21.0` and MCP 1.x.
 
 ## Run the local stack
 
@@ -64,6 +64,23 @@ transaction reservations and payment-identifier idempotency across instances.
 Default automatic payment selection accepts recognized pegged assets with a USD
 1 cap. XRP, USDC, and custom IOUs require an explicit asset, issuer where
 applicable, and per-payment cap.
+
+## Fund An RLUSD Testnet Wallet
+
+Create a fresh wallet, request XRP from the Testnet faucet, and acquire exactly
+enough official Testnet RLUSD to reach a target balance without browser wallet
+connections:
+
+```bash
+python -m devtools.rlusd_fund \
+  --new-wallet \
+  --target-rlusd 10 \
+  --max-xrp 35
+```
+
+The command prints the private wallet-file path but never its seed. Reuse that
+path with `--wallet-file` if an XRP faucet request or ledger transaction is
+pending. See the [RLUSD guide](docs/asset-guides/rlusd.md) for recovery details.
 
 ## Documentation
 

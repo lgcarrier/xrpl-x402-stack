@@ -208,7 +208,6 @@ class PaymentMiddlewareASGI(UpstreamPaymentMiddlewareASGI):
         bearer_token: str | None = None,
         response_store: RedisResourceResponseStore | None = None,
         enable_bazaar: bool = True,
-        pending_attempts: int = 3,
     ) -> None:
         selected_routes = dict(routes or route_configs or {})
         if not selected_routes:
@@ -230,7 +229,6 @@ class PaymentMiddlewareASGI(UpstreamPaymentMiddlewareASGI):
                 facilitator_client = build_facilitator_client(
                     base_url=facilitator_url,
                     bearer_token=bearer_token,
-                    pending_attempts=pending_attempts,
                 )
             server = create_resource_server(
                 facilitator_client,

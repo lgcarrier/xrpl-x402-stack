@@ -462,6 +462,7 @@ _XRPL_EXTRA_FIELDS = frozenset(
         "issuer",
         "areFeesSponsored",
         "assetTransferMethod",
+        "paymentFlow",
         "invoiceId",
         "destinationTag",
     }

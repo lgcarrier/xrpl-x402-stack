@@ -1,6 +1,6 @@
 # Core package
 
-`xrpl-x402-core` re-exports official x402 2.20.0 protocol schemas. The only
+`xrpl-x402-core` re-exports official x402 2.21.0 protocol schemas. The only
 locally owned models are XRPL-specific payload/extra/state records.
 
 Important exports include:

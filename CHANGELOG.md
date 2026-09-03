@@ -2,8 +2,12 @@
 
 ## 0.2.0
 
-- Pins the official Python protocol runtime to `x402==2.20.0` and makes all wire
+- Pins the official Python protocol runtime to `x402==2.21.0` and makes all wire
   traffic canonical v2 only.
+- Adopts x402 2.21 payment-flow handlers for XRPL authorization and its
+  exactly-one automatic retry of an identical `settlement_pending` envelope.
+  A later identical request resumes any still-pending settlement from the
+  cached protected response without repeating the handler.
 - Adds exact XRPL client, resource-server, and facilitator mechanisms for
   `xrpl:0`, `xrpl:1`, and `xrpl:2`, including sequence and ticket authorization.
 - Enforces master/RegularKey signatures, NetworkID, invoice hashing, destination
@@ -15,8 +19,13 @@
 - Moves HTTP and MCP integrations to upstream wrappers, adds Bazaar discovery,
   response withholding/recovery, issuer-aware spend controls, and standard
   receipts.
+- Adds `python -m devtools.rlusd_fund`, a browser-free XRPL Testnet workflow
+  that creates or reuses a private wallet, funds XRP, establishes the official
+  RLUSD trust line, and acquires an exact target balance with spend, fee,
+  finality, and crash-safe reconciliation controls.
 - Adds canonical header fixtures, official TypeScript XRPL cross-SDK vectors,
-  real Redis concurrency tests, and opt-in Testnet coverage.
+  real Redis concurrency tests, and completed opt-in Testnet acceptance for XRP
+  and official RLUSD with both sequence and ticket authorization.
 
 See [the migration guide](docs/migration-0.2.md) for the intentional 0.1 break.
 

@@ -27,6 +27,7 @@ from xrpl_x402_core import (
     find_default_asset,
     get_max_last_ledger_sequence,
     invoice_id_to_invoice_id_field,
+    is_valid_xrpl_network,
     normalize_currency_code,
     parse_xrpl_network_id,
     validate_requirements_shape,
@@ -288,6 +289,15 @@ def _enforce_default_asset_issuers(
 ) -> list[PaymentRequirements]:
     accepted: list[PaymentRequirements] = []
     for requirement in requirements:
+        is_exact_xrpl = (
+            requirement.scheme == "exact"
+            and is_valid_xrpl_network(str(requirement.network))
+        )
+        if is_exact_xrpl and not _is_authorization_flow(requirement):
+            continue
+        if not is_exact_xrpl:
+            accepted.append(requirement)
+            continue
         default = find_default_asset(
             requirement.asset, str(requirement.network)
         )
@@ -299,6 +309,13 @@ def _enforce_default_asset_issuers(
     return accepted
 
 
+def _is_authorization_flow(requirement: PaymentRequirements) -> bool:
+    return (requirement.extra or {}).get("paymentFlow") in {
+        None,
+        "authorization",
+    }
+
+
 def select_payment_option(
     payment_required: PaymentRequired,
     *,
@@ -307,7 +324,11 @@ def select_payment_option(
     issuer: str | None = None,
 ) -> PaymentRequirements:
     candidates = [
-        item for item in payment_required.accepts if item.scheme == "exact"
+        item
+        for item in payment_required.accepts
+        if item.scheme == "exact"
+        and is_valid_xrpl_network(str(item.network))
+        and _is_authorization_flow(item)
     ]
     if network is not None:
         candidates = [
@@ -327,7 +348,9 @@ def select_payment_option(
             if (item.extra or {}).get("issuer") == issuer
         ]
     if not candidates:
-        raise ValueError("No matching XRPL payment requirements found")
+        raise ValueError(
+            "No matching XRPL authorization payment requirements found"
+        )
     return candidates[0]
 
 

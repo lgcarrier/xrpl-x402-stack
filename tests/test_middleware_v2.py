@@ -295,7 +295,7 @@ def test_mcp_pending_retry_recovers_cached_result_without_repeating_handler() ->
                 payer="rPayer",
             ),
         ],
-        settlements=[pending, success],
+        settlements=[pending, pending, success],
     )
     accepted = PaymentRequirements(
         scheme="exact",
@@ -373,7 +373,7 @@ def test_mcp_pending_retry_recovers_cached_result_without_repeating_handler() ->
     assert second.isError is False
     assert handled["count"] == 1
     assert facilitator.verify_count == 2
-    assert facilitator.settle_count == 2
+    assert facilitator.settle_count == 3
     assert second.meta[MCP_PAYMENT_RESPONSE_META_KEY]["success"] is True
 
 
@@ -612,8 +612,8 @@ def test_payment_identifier_binds_http_query_and_body_before_handler() -> None:
     )
     assert handled["count"] == 1
     assert seen_bodies == [b"one"]
-    assert events == ["verify", "settle", "verify", "verify"]
-    assert facilitator.settle_count == 1
+    assert events == ["verify", "settle", "settle", "verify", "verify"]
+    assert facilitator.settle_count == 2
 
 
 def test_payment_identifier_is_bound_to_http_method_before_handler() -> None:
@@ -802,6 +802,62 @@ def test_wildcard_route_settles_successful_redirect() -> None:
     assert PAYMENT_RESPONSE_HEADER in response.headers
 
 
+def test_pending_settlement_reconciles_before_releasing_original_response() -> None:
+    pending = SettleResponse(
+        success=False,
+        error_reason="settlement_pending",
+        error_message="awaiting validation",
+        payer="rPayer",
+        transaction="9" * 64,
+        network="xrpl:1",
+        amount="1000",
+    )
+    success = SettleResponse(
+        success=True,
+        payer="rPayer",
+        transaction="9" * 64,
+        network="xrpl:1",
+        amount="1000",
+    )
+    events: list[str] = []
+    facilitator = FakeFacilitator(
+        settlements=[pending, success],
+        events=events,
+    )
+    store = RedisResourceResponseStore(AsyncStringRedis())
+    app = FastAPI()
+    handled = {"count": 0}
+    app.add_middleware(
+        PaymentMiddlewareASGI,
+        routes={"POST /unsafe": route(method="POST")},
+        facilitator_client=facilitator,
+        response_store=store,
+    )
+
+    @app.post("/unsafe", status_code=201)
+    async def unsafe() -> dict[str, int]:
+        handled["count"] += 1
+        return {"created": handled["count"]}
+
+    with TestClient(app) as client:
+        signature, _ = payment_header(client, "/unsafe")
+        response = client.post(
+            "/unsafe", headers={PAYMENT_SIGNATURE_HEADER: signature}
+        )
+
+    assert response.status_code == 201
+    assert response.json() == {"created": 1}
+    assert handled["count"] == 1
+    assert facilitator.verify_count == 1
+    assert facilitator.settle_count == 2
+    assert events == ["verify", "settle", "settle"]
+    receipt = decode_payment_response_header(
+        response.headers[PAYMENT_RESPONSE_HEADER]
+    )
+    assert receipt.success is True
+    assert receipt.transaction == "9" * 64
+
+
 def test_pending_unsafe_retry_does_not_repeat_handler() -> None:
     pending = SettleResponse(
         success=False,
@@ -831,7 +887,7 @@ def test_pending_unsafe_retry_does_not_repeat_handler() -> None:
                 payer="rPayer",
             ),
         ],
-        settlements=[pending, success],
+        settlements=[pending, pending, success],
     )
     store = RedisResourceResponseStore(AsyncStringRedis())
     app = FastAPI()
@@ -867,7 +923,7 @@ def test_pending_unsafe_retry_does_not_repeat_handler() -> None:
     assert second.json() == {"created": 1}
     assert handled["count"] == 1
     assert facilitator.verify_count == 2
-    assert facilitator.settle_count == 2
+    assert facilitator.settle_count == 3
     context = seen_requests[0].state.x402_payment
     assert isinstance(context, XRPLPaymentContext)
     assert context.settlement.error_reason == "settlement_pending"
@@ -931,7 +987,9 @@ def test_pending_unsafe_binary_retry_restores_exact_response() -> None:
         network="xrpl:1",
         amount="1000",
     )
-    facilitator = FakeFacilitator(settlements=[pending, success])
+    facilitator = FakeFacilitator(
+        settlements=[pending, pending, success]
+    )
     store = RedisResourceResponseStore(AsyncStringRedis())
     app = FastAPI()
     handled = {"count": 0}
@@ -974,7 +1032,7 @@ def test_pending_unsafe_binary_retry_restores_exact_response() -> None:
     assert second.headers["x-resource-version"] == "7"
     assert PAYMENT_RESPONSE_HEADER in second.headers
     assert handled["count"] == 1
-    assert facilitator.settle_count == 2
+    assert facilitator.settle_count == 3
 
 
 def test_upstream_mcp_client_receives_pending_settlement_from_raw_meta() -> None:
@@ -1066,6 +1124,7 @@ def test_upstream_mcp_client_receives_pending_settlement_from_raw_meta() -> None
     ] == expected_pending
     assert result.payment_response == pending
     assert result.is_error is True
+    assert facilitator.settle_count == 2
 
 
 def test_unsafe_payment_without_required_identifier_never_runs_handler() -> None:

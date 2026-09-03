@@ -6,6 +6,7 @@
 .mypy_cache/
 .ruff_cache/
 .venv/
+.venv-*/
 .live-test-wallets/
 __pycache__/
 *.py[cod]

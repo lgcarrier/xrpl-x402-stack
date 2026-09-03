@@ -24,8 +24,11 @@ app.add_middleware(
 ```
 
 The middleware verifies first, buffers the successful handler response, settles,
-and only then releases protected bytes. Handler errors are not settled. Pending
-settlements retry the identical facilitator envelope with bounded backoff.
+and only then releases protected bytes. Handler errors are not settled. For a
+`settlement_pending` result, the upstream x402 resource server retries the
+identical settlement envelope exactly once. If it is still pending, a later
+identical request resumes settlement from the cached protected response without
+rerunning the handler or exposing protected bytes early.
 
 Unsafe methods require the payment-identifier extension. Configure
 `RedisResourceResponseStore` so a matching retry can recover the handler result

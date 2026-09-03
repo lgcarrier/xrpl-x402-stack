@@ -1,6 +1,6 @@
 # xrpl-x402-core
 
-Shared XRPL support for the x402 v2 stack. Version 0.2.0 pins `x402==2.20.0`.
+Shared XRPL support for the x402 v2 stack. Version 0.2.0 pins `x402==2.21.0`.
 
 This package re-exports official x402 schemas such as `PaymentRequired`,
 `PaymentRequirements`, `PaymentPayload`, `VerifyRequest`, `VerifyResponse`,

@@ -908,6 +908,35 @@ def test_simulation_failure_and_accepted_requirements_mismatch_are_rejected() ->
     )
 
 
+def test_authorization_flow_is_equivalent_when_explicit_or_omitted() -> None:
+    wallet = Wallet.create()
+    implicit = xrp_requirements()
+    explicit = xrp_requirements(paymentFlow="authorization")
+
+    explicit_accepted = service(FakeXRPL(wallet)).verify(
+        signed_payload(wallet, explicit), implicit
+    )
+    implicit_accepted = service(FakeXRPL(wallet)).verify(
+        signed_payload(wallet, implicit), explicit
+    )
+
+    assert explicit_accepted.is_valid is True
+    assert implicit_accepted.is_valid is True
+
+
+def test_facilitator_rejects_non_authorization_payment_flow() -> None:
+    wallet = Wallet.create()
+    upfront = xrp_requirements(paymentFlow="upfront")
+
+    result = service(FakeXRPL(wallet)).verify(
+        signed_payload(wallet, upfront), upfront
+    )
+
+    assert result.is_valid is False
+    assert result.invalid_reason == "invalid_exact_xrpl_requirements"
+    assert "authorization" in (result.invalid_message or "")
+
+
 def test_custom_network_requires_network_id() -> None:
     wallet = Wallet.create()
     requirements = xrp_requirements().model_copy(

@@ -24,7 +24,7 @@ classifiers = [
 ]
 dependencies = [
   "pydantic>=2,<3",
-  "x402==2.20.0",
+  "x402==2.21.0",
   "xrpl-py==4.5.0",
 ]
 

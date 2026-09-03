@@ -48,7 +48,12 @@ outages as degraded infrastructure even when targeted checks pass.
 
 ## Testnet helper problems
 
-Pin `XRPL_TESTNET_RPC_URL` when public endpoints are unhealthy. Rerun
-`devtools.rlusd_topup` after a faucet cooldown. For USDC, complete the Circle
-faucet transfer and rerun `devtools.usdc_topup`; report USDC acceptance as
-unavailable until the wallet is actually funded.
+Pin `XRPL_TESTNET_RPC_URL` when public endpoints are unhealthy. For a wallet
+created with `--new-wallet`, rerun `devtools.rlusd_fund` with the standalone
+wallet file printed by the first invocation. For the cached demo buyer, rerun
+the same command without `--wallet-file`; its multi-wallet cache is not accepted
+as a standalone wallet file. The command reconciles any journaled transaction
+before signing another one. Exit status `3` means the XRP faucet or ledger
+transaction is still pending. For
+USDC, complete the Circle faucet transfer and rerun `devtools.usdc_topup`;
+report USDC acceptance as unavailable until the wallet is actually funded.

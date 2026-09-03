@@ -135,7 +135,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"  docker compose --env-file {output_path} up --build")
     print(f"  docker compose --env-file {output_path} run --rm --profile demo buyer")
     print("Asset follow-ups:")
-    print("  python -m devtools.rlusd_topup")
+    print("  python -m devtools.rlusd_fund --target-rlusd 10 --max-xrp 35")
     print("  python -m devtools.usdc_topup")
     return 0
 

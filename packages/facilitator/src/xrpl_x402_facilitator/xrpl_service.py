@@ -399,6 +399,16 @@ class ExactXRPLFacilitatorScheme:
         required_extra = dict(requirements.extra or {})
         accepted_method = accepted_extra.pop("assetTransferMethod", None)
         required_method = required_extra.pop("assetTransferMethod", None)
+        accepted_flow = (
+            accepted_extra.pop("paymentFlow", None) or "authorization"
+        )
+        required_flow = (
+            required_extra.pop("paymentFlow", None) or "authorization"
+        )
+        if accepted_flow != required_flow:
+            raise PaymentVerificationError(
+                "invalid_exact_xrpl_payment_flow_mismatch"
+            )
         if accepted_extra != required_extra:
             raise PaymentVerificationError(
                 "invalid_exact_xrpl_accepted_requirements_mismatch"
