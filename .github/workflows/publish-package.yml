@@ -36,6 +36,7 @@ jobs:
       publish_environment: ${{ steps.resolve.outputs.publish_environment }}
       package_version: ${{ steps.metadata.outputs.package_version }}
       core_requirement: ${{ steps.metadata.outputs.core_requirement }}
+      client_requirement: ${{ steps.metadata.outputs.client_requirement }}
       index_url: ${{ steps.indexes.outputs.index_url }}
       extra_index_url: ${{ steps.indexes.outputs.extra_index_url }}
 
@@ -113,14 +114,17 @@ jobs:
           project = pyproject["project"]
           version = project["version"]
           core_requirement = ""
+          client_requirement = ""
           for dependency in project.get("dependencies", []):
               if dependency.startswith("xrpl-x402-core"):
                   core_requirement = dependency
-                  break
+              elif dependency.startswith("xrpl-x402-client"):
+                  client_requirement = dependency
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
               handle.write(f"package_version={version}\n")
               handle.write(f"core_requirement={core_requirement}\n")
+              handle.write(f"client_requirement={client_requirement}\n")
           PY
 
       - name: Resolve publish indexes
@@ -162,26 +166,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install build twine
 
-      - name: Verify core dependency is available on target index
-        if: needs.resolve.outputs.package_name != 'xrpl-x402-core'
+      - name: Verify internal dependencies are available on target index
+        if: needs.resolve.outputs.core_requirement != '' || needs.resolve.outputs.client_requirement != ''
         env:
           CORE_REQUIREMENT: ${{ needs.resolve.outputs.core_requirement }}
+          CLIENT_REQUIREMENT: ${{ needs.resolve.outputs.client_requirement }}
           INDEX_URL: ${{ needs.resolve.outputs.index_url }}
-          EXTRA_INDEX_URL: ${{ needs.resolve.outputs.extra_index_url }}
         run: |
-          for attempt in 1 2 3 4 5 6; do
-            args=(download --no-deps --dest /tmp/core-index-check --index-url "$INDEX_URL")
-            if [ -n "$EXTRA_INDEX_URL" ]; then
-              args+=(--extra-index-url "$EXTRA_INDEX_URL")
+          for requirement in "$CORE_REQUIREMENT" "$CLIENT_REQUIREMENT"; do
+            if [ -z "$requirement" ]; then
+              continue
             fi
-            if python -m pip "${args[@]}" "$CORE_REQUIREMENT"; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 6 ]; then
-              echo "Unable to resolve required core dependency from the release index" >&2
-              exit 1
-            fi
-            sleep 15
+
+            for attempt in 1 2 3 4 5 6; do
+              if python -m pip download --no-deps --dest /tmp/internal-index-check --index-url "$INDEX_URL" "$requirement"; then
+                break
+              fi
+              if [ "$attempt" -eq 6 ]; then
+                echo "Unable to resolve required internal dependency $requirement from the release index" >&2
+                exit 1
+              fi
+              sleep 15
+            done
           done
 
       - name: Build distribution artifacts
@@ -263,18 +269,14 @@ jobs:
                     xrpl-x402-facilitator --help >/dev/null
                     ;;
                   middleware)
-                    if [ "$requirement" = "${PACKAGE_NAME}[x402]==${PACKAGE_VERSION}" ]; then
-                      python -c "from xrpl_x402_middleware.adapters.x402 import register_exact_xrpl_server; assert callable(register_exact_xrpl_server)"
+                    if [ "$requirement" = "${PACKAGE_NAME}[mcp]==${PACKAGE_VERSION}" ]; then
+                      python -c "from xrpl_x402_middleware import create_xrpl_mcp_payment_wrapper; assert callable(create_xrpl_mcp_payment_wrapper)"
                     else
                       python -c "from xrpl_x402_middleware import PaymentMiddlewareASGI; assert PaymentMiddlewareASGI"
                     fi
                     ;;
                   client)
-                    if [ "$requirement" = "${PACKAGE_NAME}[x402]==${PACKAGE_VERSION}" ]; then
-                      python -c "from xrpl_x402_client.adapters.x402 import register_exact_xrpl_client; assert callable(register_exact_xrpl_client)"
-                    else
-                      python -c "from xrpl_x402_client import XRPLPaymentSigner; assert XRPLPaymentSigner"
-                    fi
+                    python -c "from xrpl_x402_client import XRPLPaymentSigner, register_exact_xrpl_client; assert XRPLPaymentSigner and callable(register_exact_xrpl_client)"
                     ;;
                   payer)
                     if [ "$requirement" = "${PACKAGE_NAME}[mcp]==${PACKAGE_VERSION}" ]; then
@@ -302,8 +304,8 @@ jobs:
 
           verify_install "${PACKAGE_NAME}==${PACKAGE_VERSION}" /tmp/testpypi-base
           case "$TARGET" in
-            middleware|client)
-              verify_install "${PACKAGE_NAME}[x402]==${PACKAGE_VERSION}" /tmp/testpypi-extra
+            middleware)
+              verify_install "${PACKAGE_NAME}[mcp]==${PACKAGE_VERSION}" /tmp/testpypi-extra
               ;;
             payer)
               verify_install "${PACKAGE_NAME}[mcp]==${PACKAGE_VERSION}" /tmp/testpypi-extra
@@ -366,18 +368,14 @@ jobs:
                     xrpl-x402-facilitator --help >/dev/null
                     ;;
                   middleware)
-                    if [ "$requirement" = "${PACKAGE_NAME}[x402]==${PACKAGE_VERSION}" ]; then
-                      python -c "from xrpl_x402_middleware.adapters.x402 import register_exact_xrpl_server; assert callable(register_exact_xrpl_server)"
+                    if [ "$requirement" = "${PACKAGE_NAME}[mcp]==${PACKAGE_VERSION}" ]; then
+                      python -c "from xrpl_x402_middleware import create_xrpl_mcp_payment_wrapper; assert callable(create_xrpl_mcp_payment_wrapper)"
                     else
                       python -c "from xrpl_x402_middleware import PaymentMiddlewareASGI; assert PaymentMiddlewareASGI"
                     fi
                     ;;
                   client)
-                    if [ "$requirement" = "${PACKAGE_NAME}[x402]==${PACKAGE_VERSION}" ]; then
-                      python -c "from xrpl_x402_client.adapters.x402 import register_exact_xrpl_client; assert callable(register_exact_xrpl_client)"
-                    else
-                      python -c "from xrpl_x402_client import XRPLPaymentSigner; assert XRPLPaymentSigner"
-                    fi
+                    python -c "from xrpl_x402_client import XRPLPaymentSigner, register_exact_xrpl_client; assert XRPLPaymentSigner and callable(register_exact_xrpl_client)"
                     ;;
                   payer)
                     if [ "$requirement" = "${PACKAGE_NAME}[mcp]==${PACKAGE_VERSION}" ]; then
@@ -405,8 +403,8 @@ jobs:
 
           verify_install "${PACKAGE_NAME}==${PACKAGE_VERSION}" /tmp/pypi-base
           case "$TARGET" in
-            middleware|client)
-              verify_install "${PACKAGE_NAME}[x402]==${PACKAGE_VERSION}" /tmp/pypi-extra
+            middleware)
+              verify_install "${PACKAGE_NAME}[mcp]==${PACKAGE_VERSION}" /tmp/pypi-extra
               ;;
             payer)
               verify_install "${PACKAGE_NAME}[mcp]==${PACKAGE_VERSION}" /tmp/pypi-extra

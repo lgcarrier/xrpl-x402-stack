@@ -1,50 +1,55 @@
 from __future__ import annotations
 
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Any, Mapping
 
-from xrpl_x402_core import (
+from x402.http import RouteConfig
+from x402.schemas import (
     PaymentPayload,
     PaymentRequired,
-    PaymentResponse,
-    XRPLAmount,
-    XRPLAsset,
-    XRPLPaymentOption,
-    XRPLPaymentPayload,
+    PaymentRequirements,
+    SettleResponse,
 )
-from xrpl_x402_core.models import StrictModel
 
 
-class RouteConfig(StrictModel):
-    facilitator_url: str = Field(alias="facilitatorUrl")
-    bearer_token: str = Field(alias="bearerToken", repr=False)
-    accepts: list[XRPLPaymentOption]
-    description: str | None = None
-    mime_type: str = Field(default="application/json", alias="mimeType")
+@dataclass(frozen=True, slots=True)
+class AcceptedRequirementsContext:
+    scheme: str
+    network: str
+    asset: str
+    amount: str
+    pay_to: str
+    max_timeout_seconds: int
+    extra: Mapping[str, Any]
 
-    model_config = ConfigDict(extra="forbid", populate_by_name=True, str_strip_whitespace=True)
-
-    @field_validator("facilitator_url", "bearer_token")
     @classmethod
-    def _validate_required_strings(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("Value is required")
-        return normalized
+    def from_requirements(
+        cls, requirements: PaymentRequirements
+    ) -> "AcceptedRequirementsContext":
+        return cls(
+            scheme=requirements.scheme,
+            network=str(requirements.network),
+            asset=requirements.asset,
+            amount=requirements.amount,
+            pay_to=requirements.pay_to,
+            max_timeout_seconds=requirements.max_timeout_seconds,
+            extra=MappingProxyType(dict(requirements.extra or {})),
+        )
 
-    @model_validator(mode="after")
-    def _validate_accepts(self) -> "RouteConfig":
-        if not self.accepts:
-            raise ValueError("At least one payment option is required")
-        return self
+
+@dataclass(frozen=True, slots=True)
+class XRPLPaymentContext:
+    settlement: SettleResponse
+    accepted: AcceptedRequirementsContext
 
 
 __all__ = [
+    "AcceptedRequirementsContext",
     "PaymentPayload",
     "PaymentRequired",
-    "PaymentResponse",
+    "PaymentRequirements",
     "RouteConfig",
-    "XRPLAmount",
-    "XRPLAsset",
-    "XRPLPaymentOption",
-    "XRPLPaymentPayload",
+    "SettleResponse",
+    "XRPLPaymentContext",
 ]

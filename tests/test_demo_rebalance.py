@@ -25,10 +25,12 @@ def write_env(path: Path, *, merchant: str, buyer_seed: str, asset_code: str, is
                 f"PRICE_ASSET_CODE={asset_code}",
                 f"PRICE_ASSET_ISSUER={issuer}",
                 "PRICE_ASSET_AMOUNT=1.25",
+                f"PAYMENT_ASSET={asset_code}",
+                f"PAYMENT_ASSET_ISSUER={issuer}",
                 (
-                    f"PAYMENT_ASSET={asset_code}:{issuer}"
+                    "PAYMENT_MAX_SPEND=1.25"
                     if issuer
-                    else "PAYMENT_ASSET=XRP:native"
+                    else "PAYMENT_MAX_SPEND=1000"
                 ),
                 "ALLOWED_ISSUED_ASSETS=",
                 "",

@@ -1,3 +1,11 @@
 from xrpl_x402_facilitator.factory import create_app
+from xrpl_x402_facilitator.xrpl_service import (
+    ExactXRPLFacilitatorScheme,
+    XRPLService,
+)
 
-__all__ = ["create_app"]
+__all__ = [
+    "ExactXRPLFacilitatorScheme",
+    "XRPLService",
+    "create_app",
+]

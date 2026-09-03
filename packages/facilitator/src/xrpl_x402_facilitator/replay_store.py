@@ -1,173 +1,139 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from threading import Lock
 from typing import Any, Protocol
-from uuid import uuid4
 
+from xrpl_x402_core import XRPLSettlementState
 from xrpl_x402_facilitator.config import Settings
-from xrpl_x402_facilitator.redis_utils import create_async_redis_client
-
-REPLAY_PENDING = "pending"
-REPLAY_PROCESSED = "processed"
-REPLAY_ERROR_MESSAGE = "Transaction already processed (replay attack)"
 
 
-@dataclass(frozen=True)
-class ReplayReservation:
-    invoice_id: str
-    blob_hash: str
-    reservation_id: str
+_MONOTONIC_UPDATE_SCRIPT = """
+local current_json = redis.call("GET", KEYS[1])
+if not current_json then
+  return 0
+end
+
+local current = cjson.decode(current_json)
+local candidate = cjson.decode(ARGV[1])
+local ranks = {pending = 0, failed = 1, validated = 2}
+local current_rank = ranks[current.status]
+local candidate_rank = ranks[candidate.status]
+if current_rank == nil or candidate_rank == nil then
+  return redis.error_reply("invalid settlement state")
+end
+
+if current.status == "pending" and candidate.status == "pending" then
+  redis.call("SET", KEYS[1], ARGV[1], "XX")
+  return 1
+end
+
+if candidate_rank > current_rank then
+  redis.call("SET", KEYS[1], ARGV[1], "XX", "EX", ARGV[2])
+  return 1
+end
+
+if current.status ~= "pending" then
+  redis.call("EXPIRE", KEYS[1], ARGV[2])
+end
+return 0
+"""
 
 
-class ReplayStore(Protocol):
-    async def guard_available(self, invoice_id: str, blob_hash: str) -> None:
-        ...
-
-    async def reserve(self, invoice_id: str, blob_hash: str) -> ReplayReservation:
-        ...
-
-    async def mark_processed(self, reservation: ReplayReservation) -> None:
-        ...
-
-    async def release_pending(self, reservation: ReplayReservation) -> None:
-        ...
+_STATE_RANK = {"pending": 0, "failed": 1, "validated": 2}
 
 
-class RedisReplayStore:
-    def __init__(
-        self,
-        redis_client: Any,
-        *,
-        processed_ttl_seconds: int,
-        pending_ttl_seconds: int,
-    ) -> None:
+class SettlementStore(Protocol):
+    def get(self, transaction: str) -> XRPLSettlementState | None: ...
+    def reserve(self, state: XRPLSettlementState, ttl_seconds: int) -> bool: ...
+    def update(self, state: XRPLSettlementState, ttl_seconds: int) -> None: ...
+
+
+class RedisSettlementStore:
+    """Cross-process transaction-hash settlement coordination."""
+
+    def __init__(self, redis_client: Any) -> None:
         self._redis = redis_client
-        self._processed_ttl_seconds = processed_ttl_seconds
-        self._pending_ttl_seconds = pending_ttl_seconds
 
     @staticmethod
-    def _invoice_key(invoice_id: str) -> str:
-        return f"facilitator:replay:invoice:{invoice_id}"
+    def _key(transaction: str) -> str:
+        return f"facilitator:settlement:{transaction.upper()}"
 
-    @staticmethod
-    def _blob_key(blob_hash: str) -> str:
-        return f"facilitator:replay:blob:{blob_hash}"
-
-    @staticmethod
-    def _pending_value(reservation_id: str) -> str:
-        return f"{REPLAY_PENDING}:{reservation_id}"
-
-    @staticmethod
-    def _processed_value() -> str:
-        return REPLAY_PROCESSED
-
-    @staticmethod
-    def _matches_pending(record: Any, reservation_id: str) -> bool:
-        return record == f"{REPLAY_PENDING}:{reservation_id}"
-
-    async def guard_available(self, invoice_id: str, blob_hash: str) -> None:
-        values = await self._redis.mget(
-            self._invoice_key(invoice_id),
-            self._blob_key(blob_hash),
+    def get(self, transaction: str) -> XRPLSettlementState | None:
+        raw = self._redis.get(self._key(transaction))
+        return (
+            XRPLSettlementState.model_validate_json(raw)
+            if raw is not None
+            else None
         )
-        if any(value is not None for value in values):
-            raise ValueError(REPLAY_ERROR_MESSAGE)
 
-    async def reserve(self, invoice_id: str, blob_hash: str) -> ReplayReservation:
-        reservation = ReplayReservation(
-            invoice_id=invoice_id,
-            blob_hash=blob_hash,
-            reservation_id=uuid4().hex,
+    def reserve(self, state: XRPLSettlementState, ttl_seconds: int) -> bool:
+        options: dict[str, Any] = {"nx": True}
+        if state.status != "pending":
+            options["ex"] = ttl_seconds
+        return bool(
+            self._redis.set(
+                self._key(state.transaction),
+                state.model_dump_json(),
+                **options,
+            )
         )
-        invoice_key = self._invoice_key(invoice_id)
-        blob_key = self._blob_key(blob_hash)
-        pending_value = self._pending_value(reservation.reservation_id)
 
-        while True:
-            try:
-                async with self._redis.pipeline() as pipe:
-                    await pipe.watch(invoice_key, blob_key)
-                    existing_values = await pipe.mget(invoice_key, blob_key)
-                    if any(value is not None for value in existing_values):
-                        raise ValueError(REPLAY_ERROR_MESSAGE)
-                    pipe.multi()
-                    pipe.set(invoice_key, pending_value, ex=self._pending_ttl_seconds)
-                    pipe.set(blob_key, pending_value, ex=self._pending_ttl_seconds)
-                    await pipe.execute()
-                    return reservation
-            except ValueError:
-                raise
-            except Exception as exc:
-                watch_error_type = getattr(self._redis, "WatchError", None)
-                if watch_error_type is not None and isinstance(exc, watch_error_type):
-                    continue
-                try:
-                    from redis.exceptions import WatchError
-                except ModuleNotFoundError:
-                    raise
-                if isinstance(exc, WatchError):
-                    continue
-                raise
-
-    async def mark_processed(self, reservation: ReplayReservation) -> None:
-        async with self._redis.pipeline() as pipe:
-            pipe.multi()
-            pipe.set(
-                self._invoice_key(reservation.invoice_id),
-                self._processed_value(),
-                ex=self._processed_ttl_seconds,
-            )
-            pipe.set(
-                self._blob_key(reservation.blob_hash),
-                self._processed_value(),
-                ex=self._processed_ttl_seconds,
-            )
-            await pipe.execute()
-
-    async def release_pending(self, reservation: ReplayReservation) -> None:
-        invoice_key = self._invoice_key(reservation.invoice_id)
-        blob_key = self._blob_key(reservation.blob_hash)
-        pending_value = self._pending_value(reservation.reservation_id)
-
-        while True:
-            try:
-                async with self._redis.pipeline() as pipe:
-                    await pipe.watch(invoice_key, blob_key)
-                    current_invoice, current_blob = await pipe.mget(invoice_key, blob_key)
-                    pipe.multi()
-                    if self._matches_pending(current_invoice, reservation.reservation_id):
-                        pipe.delete(invoice_key)
-                    if self._matches_pending(current_blob, reservation.reservation_id):
-                        pipe.delete(blob_key)
-                    await pipe.execute()
-                    return
-            except Exception as exc:
-                watch_error_type = getattr(self._redis, "WatchError", None)
-                if watch_error_type is not None and isinstance(exc, watch_error_type):
-                    continue
-                try:
-                    from redis.exceptions import WatchError
-                except ModuleNotFoundError:
-                    raise
-                if isinstance(exc, WatchError):
-                    continue
-                raise
+    def update(self, state: XRPLSettlementState, ttl_seconds: int) -> None:
+        self._redis.eval(
+            _MONOTONIC_UPDATE_SCRIPT,
+            1,
+            self._key(state.transaction),
+            state.model_dump_json(),
+            ttl_seconds,
+        )
 
 
-def replay_pending_ttl_seconds(settings: Settings) -> int:
-    return max(settings.VALIDATION_TIMEOUT + 60, 300)
+class InMemorySettlementStore:
+    """Deterministic test store with the atomic reserve contract."""
+
+    def __init__(self) -> None:
+        self._values: dict[str, XRPLSettlementState] = {}
+        self._lock = Lock()
+
+    def get(self, transaction: str) -> XRPLSettlementState | None:
+        with self._lock:
+            return self._values.get(transaction.upper())
+
+    def reserve(self, state: XRPLSettlementState, ttl_seconds: int) -> bool:
+        del ttl_seconds
+        with self._lock:
+            key = state.transaction.upper()
+            if key in self._values:
+                return False
+            self._values[key] = state
+            return True
+
+    def update(self, state: XRPLSettlementState, ttl_seconds: int) -> None:
+        del ttl_seconds
+        with self._lock:
+            key = state.transaction.upper()
+            current = self._values.get(key)
+            if current is None:
+                return
+            current_rank = _STATE_RANK[current.status]
+            candidate_rank = _STATE_RANK[state.status]
+            if (
+                current.status == "pending"
+                and state.status == "pending"
+            ) or candidate_rank > current_rank:
+                self._values[key] = state
 
 
-def build_replay_store(
-    settings: Settings,
-    redis_client: Any | None = None,
-) -> ReplayStore:
-    pending_ttl_seconds = replay_pending_ttl_seconds(settings)
-    if redis_client is None:
-        redis_client = create_async_redis_client(settings.REDIS_URL.get_secret_value())
+def create_sync_redis_client(url: str) -> Any:
+    import redis
 
-    return RedisReplayStore(
-        redis_client,
-        processed_ttl_seconds=settings.REPLAY_PROCESSED_TTL_SECONDS,
-        pending_ttl_seconds=pending_ttl_seconds,
+    return redis.from_url(url, decode_responses=True)
+
+
+def build_settlement_store(
+    settings: Settings, redis_client: Any | None = None
+) -> SettlementStore:
+    client = redis_client or create_sync_redis_client(
+        settings.REDIS_URL.get_secret_value()
     )
+    return RedisSettlementStore(client)

@@ -1,0 +1,73 @@
+{
+  "paymentRequired": {
+    "x402Version": 2,
+    "resource": {
+      "url": "https://merchant.example/paid",
+      "description": "Paid endpoint",
+      "mimeType": "application/json"
+    },
+    "accepts": [{
+      "scheme": "exact",
+      "network": "xrpl:1",
+      "asset": "XRP",
+      "amount": "1000",
+      "payTo": "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+      "maxTimeoutSeconds": 60,
+      "extra": {
+        "areFeesSponsored": false,
+        "assetTransferMethod": "sequence"
+      }
+    }],
+    "extensions": {
+      "unknown": {
+        "info": {"opaque": true},
+        "schema": {"type": "object"}
+      }
+    }
+  },
+  "paymentPayload": {
+    "x402Version": 2,
+    "payload": {"signedTxBlob": "AA"},
+    "accepted": {
+      "scheme": "exact",
+      "network": "xrpl:1",
+      "asset": "XRP",
+      "amount": "1000",
+      "payTo": "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+      "maxTimeoutSeconds": 60,
+      "extra": {
+        "areFeesSponsored": false,
+        "assetTransferMethod": "sequence"
+      }
+    },
+    "resource": {
+      "url": "https://merchant.example/paid",
+      "description": "Paid endpoint",
+      "mimeType": "application/json"
+    },
+    "extensions": {
+      "unknown": {
+        "info": {"opaque": true},
+        "schema": {"type": "object"}
+      }
+    }
+  },
+  "verifyResponse": {
+    "isValid": true,
+    "payer": "rPayer",
+    "extra": {"verificationPath": "simulation"}
+  },
+  "settleResponse": {
+    "success": true,
+    "payer": "rPayer",
+    "transaction": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "network": "xrpl:1",
+    "amount": "1000",
+    "extra": {"status": "validated"}
+  },
+  "headers": {
+    "PAYMENT-REQUIRED": "eyJ4NDAyVmVyc2lvbiI6MiwicmVzb3VyY2UiOnsidXJsIjoiaHR0cHM6Ly9tZXJjaGFudC5leGFtcGxlL3BhaWQiLCJkZXNjcmlwdGlvbiI6IlBhaWQgZW5kcG9pbnQiLCJtaW1lVHlwZSI6ImFwcGxpY2F0aW9uL2pzb24ifSwiYWNjZXB0cyI6W3sic2NoZW1lIjoiZXhhY3QiLCJuZXR3b3JrIjoieHJwbDoxIiwiYXNzZXQiOiJYUlAiLCJhbW91bnQiOiIxMDAwIiwicGF5VG8iOiJyUFQxU2pxMllHckJNVHR0WDRHWkhqS3U5ZHlmemJwQVllIiwibWF4VGltZW91dFNlY29uZHMiOjYwLCJleHRyYSI6eyJhcmVGZWVzU3BvbnNvcmVkIjpmYWxzZSwiYXNzZXRUcmFuc2Zlck1ldGhvZCI6InNlcXVlbmNlIn19XSwiZXh0ZW5zaW9ucyI6eyJ1bmtub3duIjp7ImluZm8iOnsib3BhcXVlIjp0cnVlfSwic2NoZW1hIjp7InR5cGUiOiJvYmplY3QifX19fQ==",
+    "PAYMENT-SIGNATURE": "eyJ4NDAyVmVyc2lvbiI6MiwicGF5bG9hZCI6eyJzaWduZWRUeEJsb2IiOiJBQSJ9LCJhY2NlcHRlZCI6eyJzY2hlbWUiOiJleGFjdCIsIm5ldHdvcmsiOiJ4cnBsOjEiLCJhc3NldCI6IlhSUCIsImFtb3VudCI6IjEwMDAiLCJwYXlUbyI6InJQVDFTanEyWUdyQk1UdHRYNEdaSGpLdTlkeWZ6YnBBWWUiLCJtYXhUaW1lb3V0U2Vjb25kcyI6NjAsImV4dHJhIjp7ImFyZUZlZXNTcG9uc29yZWQiOmZhbHNlLCJhc3NldFRyYW5zZmVyTWV0aG9kIjoic2VxdWVuY2UifX0sInJlc291cmNlIjp7InVybCI6Imh0dHBzOi8vbWVyY2hhbnQuZXhhbXBsZS9wYWlkIiwiZGVzY3JpcHRpb24iOiJQYWlkIGVuZHBvaW50IiwibWltZVR5cGUiOiJhcHBsaWNhdGlvbi9qc29uIn0sImV4dGVuc2lvbnMiOnsidW5rbm93biI6eyJpbmZvIjp7Im9wYXF1ZSI6dHJ1ZX0sInNjaGVtYSI6eyJ0eXBlIjoib2JqZWN0In19fX0=",
+    "PAYMENT-RESPONSE": "eyJzdWNjZXNzIjp0cnVlLCJwYXllciI6InJQYXllciIsInRyYW5zYWN0aW9uIjoiQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQSIsIm5ldHdvcmsiOiJ4cnBsOjEiLCJhbW91bnQiOiIxMDAwIiwiZXh0cmEiOnsic3RhdHVzIjoidmFsaWRhdGVkIn19"
+  }
+}

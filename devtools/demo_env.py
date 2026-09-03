@@ -11,7 +11,7 @@ from devtools.live_testnet_support import (
     wallet_cache_path,
 )
 from devtools.quickstart import DEFAULT_PRICE_DROPS
-from xrpl_x402_core import NETWORK_RLUSD_ISSUERS, NETWORK_USDC_ISSUERS, asset_identifier_from_parts
+from xrpl_x402_core import NETWORK_RLUSD_ISSUERS, NETWORK_USDC_ISSUERS
 
 DEFAULT_BASE_PATH = Path(".env.quickstart")
 DEFAULT_RLUSD_AMOUNT = "1.25"
@@ -99,7 +99,7 @@ def demo_allowed_issued_assets(*, asset: str, issuer: str | None, network_id: st
     if issuer == built_in_issuer(asset, network_id):
         return ""
     code = asset.upper()
-    return asset_identifier_from_parts(code, issuer)
+    return f"{code}:{issuer}"
 
 
 def configure_demo_env(
@@ -119,7 +119,9 @@ def configure_demo_env(
         set_env_value(lines, "PRICE_ASSET_CODE", "XRP")
         set_env_value(lines, "PRICE_ASSET_ISSUER", "")
         set_env_value(lines, "PRICE_ASSET_AMOUNT", "")
-        set_env_value(lines, "PAYMENT_ASSET", "XRP:native")
+        set_env_value(lines, "PAYMENT_ASSET", "XRP")
+        set_env_value(lines, "PAYMENT_ASSET_ISSUER", "")
+        set_env_value(lines, "PAYMENT_MAX_SPEND", str(resolved_price_drops))
         set_env_value(lines, "ALLOWED_ISSUED_ASSETS", "")
         return
 
@@ -130,7 +132,9 @@ def configure_demo_env(
     set_env_value(lines, "PRICE_ASSET_CODE", code)
     set_env_value(lines, "PRICE_ASSET_ISSUER", issuer)
     set_env_value(lines, "PRICE_ASSET_AMOUNT", amount)
-    set_env_value(lines, "PAYMENT_ASSET", asset_identifier_from_parts(code, issuer))
+    set_env_value(lines, "PAYMENT_ASSET", code)
+    set_env_value(lines, "PAYMENT_ASSET_ISSUER", issuer)
+    set_env_value(lines, "PAYMENT_MAX_SPEND", amount)
     set_env_value(
         lines,
         "ALLOWED_ISSUED_ASSETS",

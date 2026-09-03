@@ -20,10 +20,9 @@ app.add_typer(skill_app, name="skill")
 @app.command()
 def pay(
     url: str,
-    amount: float = typer.Option(0.001, help="Default spend cap in asset units"),
-    asset: str = typer.Option("XRP", help="Asset code to pay with"),
+    asset: str | None = typer.Option(None, help="Explicit non-default asset code"),
     issuer: str | None = typer.Option(None, help="Issuer for issued assets"),
-    max_spend: float | None = typer.Option(None, help="Explicit spend cap override"),
+    max_spend: str | None = typer.Option(None, help="Explicit per-payment cap"),
     dry_run: bool = typer.Option(False, help="Preview the request without signing or retrying"),
 ) -> None:
     """Pay for a URL using XRPL x402."""
@@ -31,7 +30,6 @@ def pay(
     result = asyncio.run(
         pay_with_x402(
             url=url,
-            amount=amount,
             asset=asset,
             issuer=issuer,
             max_spend=max_spend,
@@ -46,10 +44,9 @@ def proxy(
     target_base_url: str,
     host: str = typer.Option("127.0.0.1", help="Bind host"),
     port: int = typer.Option(8787, help="Bind port"),
-    amount: float = typer.Option(0.001, help="Default spend cap in asset units"),
-    asset: str = typer.Option("XRP", help="Asset code to pay with"),
+    asset: str | None = typer.Option(None, help="Explicit non-default asset code"),
     issuer: str | None = typer.Option(None, help="Issuer for issued assets"),
-    max_spend: float | None = typer.Option(None, help="Explicit spend cap override"),
+    max_spend: str | None = typer.Option(None, help="Explicit per-payment cap"),
     dry_run: bool = typer.Option(False, help="Preview proxy requests without paying"),
 ) -> None:
     """Run the local x402 auto-pay forward proxy."""
@@ -58,7 +55,6 @@ def proxy(
         target_base_url=target_base_url,
         host=host,
         port=port,
-        amount=amount,
         asset=asset,
         issuer=issuer,
         max_spend=max_spend,
@@ -90,8 +86,14 @@ def receipts(limit: int = typer.Option(10, help="Maximum receipts to show")) -> 
         typer.echo("No receipts recorded yet.")
         return
     for receipt in receipts:
+        accepted = receipt["accepted"]
+        settlement = receipt["settlement"]
+        asset = accepted["asset"]
+        issuer = (accepted.get("extra") or {}).get("issuer")
+        asset_label = f"{asset}:{issuer}" if issuer else asset
         typer.echo(
-            f"{receipt['url']} -> {receipt['amount']} {receipt['asset_identifier']} ({receipt['tx_hash']})"
+            f"{receipt['url']} -> {accepted['amount']} {asset_label} "
+            f"({settlement['transaction']}) [{receipt['state']}]"
         )
 
 
@@ -107,12 +109,11 @@ def budget(
 
 @app.command()
 def mcp(stdio: bool = True) -> None:
-    """Run the official XRPL x402 MCP server for local agents."""
+    """Run the local XRPL x402 payer MCP service."""
 
     if stdio:
         importlib.import_module("xrpl_x402_payer.mcp").main()
         return
-
     raise typer.BadParameter("Only stdio transport is supported in this release.")
 
 

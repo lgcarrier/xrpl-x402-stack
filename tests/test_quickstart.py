@@ -25,7 +25,10 @@ def test_render_quickstart_env_contains_expected_values() -> None:
     assert "FACILITATOR_BEARER_TOKEN=quickstart-token" in rendered
     assert "XRPL_RPC_URL=https://resolved.testnet.rpc/" in rendered
     assert "PRICE_DROPS=2500" in rendered
-    assert "PAYMENT_ASSET=XRP:native" in rendered
+    assert "PAYMENT_ASSET=XRP" in rendered
+    assert "PAYMENT_ASSET_ISSUER=" in rendered
+    assert "PAYMENT_MAX_SPEND=2500" in rendered
+    assert "SETTLEMENT_MODE" not in rendered
 
 
 def test_mask_secret_preserves_prefix_and_redacts_remaining_characters() -> None:

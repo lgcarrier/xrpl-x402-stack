@@ -11,7 +11,7 @@ PUBLIC_TESTNET_RPC_URLS: tuple[str, ...] = (
 )
 TESTNET_NETWORK_ID = 1
 DEFAULT_RPC_TIMEOUT_SECONDS = 5.0
-DEFAULT_USER_AGENT = "xrpl-x402-stack/0.1"
+DEFAULT_USER_AGENT = "xrpl-x402-stack/0.2.0"
 
 
 class TestnetRPCResolutionError(RuntimeError):

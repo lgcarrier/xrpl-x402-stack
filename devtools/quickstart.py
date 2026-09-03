@@ -71,7 +71,6 @@ def render_quickstart_env(
         f"XRPL_RPC_URL={xrpl_rpc_url}",
         "NETWORK_ID=xrpl:1",
         "XRPL_NETWORK=xrpl:1",
-        "SETTLEMENT_MODE=validated",
         f"MY_DESTINATION_ADDRESS={merchant_wallet.classic_address}",
         f"FACILITATOR_BEARER_TOKEN={facilitator_token}",
         f"XRPL_WALLET_SEED={buyer_seed}",
@@ -79,10 +78,12 @@ def render_quickstart_env(
         "PRICE_ASSET_CODE=XRP",
         "PRICE_ASSET_ISSUER=",
         "PRICE_ASSET_AMOUNT=",
-        "PAYMENT_ASSET=XRP:native",
+        "PAYMENT_ASSET=XRP",
+        "PAYMENT_ASSET_ISSUER=",
+        f"PAYMENT_MAX_SPEND={price_drops}",
         "",
-        "# To demo RLUSD, set PRICE_ASSET_CODE/ISSUER/AMOUNT and PAYMENT_ASSET accordingly.",
-        "# To demo USDC, set PRICE_ASSET_CODE/ISSUER/AMOUNT and PAYMENT_ASSET accordingly.",
+        "# To demo RLUSD or USDC, set PRICE_ASSET_CODE/ISSUER/AMOUNT and",
+        "# PAYMENT_ASSET/PAYMENT_ASSET_ISSUER/PAYMENT_MAX_SPEND explicitly.",
         "",
     ]
     return "\n".join(lines)
@@ -134,7 +135,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"  docker compose --env-file {output_path} up --build")
     print(f"  docker compose --env-file {output_path} run --rm --profile demo buyer")
     print("Asset follow-ups:")
-    print("  python -m devtools.rlusd_topup")
+    print("  python -m devtools.rlusd_fund --target-rlusd 10 --max-xrp 35")
     print("  python -m devtools.usdc_topup")
     return 0
 

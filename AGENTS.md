@@ -31,7 +31,7 @@
 - Run facilitator locally: `xrpl-x402-facilitator --reload`
 - Run merchant example: `uvicorn examples.merchant_fastapi.app:app --reload --port 8010`
 - Run tests: `pytest`
-- Run live XRPL Testnet integration test: `RUN_XRPL_TESTNET_LIVE=1 pytest -m live tests/integration/test_live_testnet.py -s`
+- Run live XRPL Testnet integration test: `RUN_XRPL_TESTNET_LIVE=1 pytest -m live tests/integration/test_live_testnet_v2.py -s`
 - Compile-check source: `PYTHONPYCACHEPREFIX=/tmp/pycache python -m compileall packages tests examples devtools`
 - Build hosted docs: `mkdocs build --strict`
 - Build all package artifacts:
@@ -58,7 +58,7 @@
 - Keep the live XRPL Testnet test out of the default routine suite; it depends on external network and faucet availability.
 - If changing XRPL settlement, replay protection, ledger submission or validation, buyer signing, or live-test tooling, run the full payment-path verification locally:
   - `pytest`
-  - `RUN_XRPL_TESTNET_LIVE=1 pytest -m live tests/integration/test_live_testnet.py -s`
+  - `RUN_XRPL_TESTNET_LIVE=1 pytest -m live tests/integration/test_live_testnet_v2.py -s`
 - If changing packaging, release automation, package metadata, or publish docs, also run:
   - `for package in packages/core packages/facilitator packages/middleware packages/client packages/payer; do ( cd "$package" && python -m build --sdist && python -m build --wheel ); done`
   - `twine check packages/*/dist/*`

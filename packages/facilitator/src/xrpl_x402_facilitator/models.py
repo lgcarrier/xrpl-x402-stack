@@ -1,17 +1,19 @@
-from xrpl_x402_core import (
-    FacilitatorSettleResponse as SettleResponse,
-    FacilitatorSupportedResponse as SupportedResponse,
-    FacilitatorVerifyResponse as VerifyResponse,
-    PaymentRequest,
-    StructuredAmount,
-    XRPLAsset as AssetDescriptor,
+"""Official x402 facilitator schemas re-exported for import compatibility."""
+
+from x402.schemas import (
+    SettleRequest,
+    SettleResponse,
+    SupportedKind,
+    SupportedResponse,
+    VerifyRequest,
+    VerifyResponse,
 )
 
 __all__ = [
-    "AssetDescriptor",
-    "PaymentRequest",
+    "SettleRequest",
     "SettleResponse",
-    "StructuredAmount",
+    "SupportedKind",
     "SupportedResponse",
+    "VerifyRequest",
     "VerifyResponse",
 ]

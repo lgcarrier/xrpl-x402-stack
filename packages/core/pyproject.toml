@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "xrpl-x402-core"
-version = "0.1.2"
-description = "Shared XRPL x402 wire models and helpers"
+version = "0.2.0"
+description = "XRPL exact-payment mechanisms and helpers for x402 v2"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.12"
 license = "MIT"
@@ -24,6 +24,8 @@ classifiers = [
 ]
 dependencies = [
   "pydantic>=2,<3",
+  "x402==2.21.0",
+  "xrpl-py==4.5.0",
 ]
 
 [project.urls]
@@ -35,6 +37,7 @@ Changelog = "https://github.com/lgcarrier/xrpl-x402-stack/blob/main/CHANGELOG.md
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/xrpl_x402_core"]
+core-metadata-version = "2.4"
 
 [tool.hatch.build.hooks.custom]
 path = "build_hook.py"
@@ -43,6 +46,7 @@ path = "build_hook.py"
 "LICENSE" = "LICENSE"
 
 [tool.hatch.build.targets.sdist]
+core-metadata-version = "2.4"
 include = [
   "/src/xrpl_x402_core",
   "/README.md",

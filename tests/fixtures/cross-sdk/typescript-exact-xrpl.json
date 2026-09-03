@@ -1,0 +1,39 @@
+{
+  "source": {
+    "repository": "x402-foundation/x402",
+    "commit": "f8a3682de3e65d18670bd837212ed49985094e13",
+    "file": "typescript/packages/mechanisms/xrpl/test/integrations/exact-xrpl.test.ts",
+    "runtime": "xrpl@4.6.0"
+  },
+  "payer": "rG31cLyErnqeVj2eomEjBZtq7PYaupGYzL",
+  "paymentRequirements": {
+    "scheme": "exact",
+    "network": "xrpl:1",
+    "asset": "XRP",
+    "amount": "1000000",
+    "payTo": "rGsd42GGEq1tJBPQ3Aoj9iyePZbxiX5Nrv",
+    "maxTimeoutSeconds": 60,
+    "extra": {
+      "areFeesSponsored": false,
+      "invoiceId": "INV-2026-XRPL-SETTLE"
+    }
+  },
+  "paymentPayload": {
+    "x402Version": 2,
+    "accepted": {
+      "scheme": "exact",
+      "network": "xrpl:1",
+      "asset": "XRP",
+      "amount": "1000000",
+      "payTo": "rGsd42GGEq1tJBPQ3Aoj9iyePZbxiX5Nrv",
+      "maxTimeoutSeconds": 60,
+      "extra": {
+        "areFeesSponsored": false,
+        "invoiceId": "INV-2026-XRPL-SETTLE"
+      }
+    },
+    "payload": {
+      "signedTxBlob": "1200002400000001201B000003E8501187829139EDDDD7BD420DE35872BFC4717F9ADA726CD95706F7D8C8D6543830286140000000000F424068400000000000000C7321EDA57EBBCB502C2009EFE17229E8DC865DCCB192C52D7888D624DC9EBADDB815F07440025A3A04965227B66E375D0CD1027DA7C95C794C0E47385184868F8AC7DD62075B238250252FF1907FECC48D4FE4F0B8B40FA00D9D922906C0649B2B560B62058114A6070B8A1822E3322676A99F0C804EE2D15B82708314A509149915BBDDCB1D46C30BBA9D3F496C3659AA"
+    }
+  }
+}

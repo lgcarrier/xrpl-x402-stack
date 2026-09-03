@@ -1,0 +1,227 @@
+{
+  "source": {
+    "repository": "x402-foundation/x402",
+    "commit": "f8a3682de3e65d18670bd837212ed49985094e13",
+    "package": "@x402/xrpl@2.23.0",
+    "packageIntegrity": "sha512-mdb/YoSTBwXZFuCJrMoWtzryXYzkAWgQnKfrQdhDc1fdgX01d2e0NAH9t5RGOETu5RNyeD0saHEnBq3Ob8fTvg==",
+    "runtime": "xrpl@4.6.0",
+    "sourceFile": "typescript/packages/mechanisms/xrpl/src/exact/client/scheme.ts",
+    "generatorApi": "ExactXrplScheme.createPaymentPayload with createXrplWalletSigner",
+    "validatorApi": "ExactXrplScheme.verify from @x402/xrpl/exact/facilitator",
+    "envelopeNote": "The x402 client adds accepted to the scheme result to form PaymentPayload.",
+    "warning": "Deterministic test-only wallet entropy; never fund these accounts."
+  },
+  "vectors": [
+    {
+      "name": "iou-sequence-master-key",
+      "walletFixture": {
+        "accountEntropyHex": "000102030405060708090A0B0C0D0E0F"
+      },
+      "payer": "rGMTQpyhaDwWTqmw4dcYHj5NPJhtWNhtRW",
+      "signingKeyAddress": "rGMTQpyhaDwWTqmw4dcYHj5NPJhtWNhtRW",
+      "ledgerState": {
+        "currentLedgerIndex": 990,
+        "accountSequence": 7,
+        "ticketSequence": null,
+        "regularKey": null,
+        "masterKeyDisabled": false
+      },
+      "clientOptions": {
+        "feeDrops": "12",
+        "currentLedgerIndex": 990,
+        "accountSequence": 7,
+        "ticketSequence": null
+      },
+      "paymentRequirements": {
+        "scheme": "exact",
+        "network": "xrpl:1",
+        "asset": "524C555344000000000000000000000000000000",
+        "amount": "10.5",
+        "payTo": "rGsd42GGEq1tJBPQ3Aoj9iyePZbxiX5Nrv",
+        "maxTimeoutSeconds": 60,
+        "extra": {
+          "areFeesSponsored": false,
+          "assetTransferMethod": "sequence",
+          "issuer": "rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV",
+          "invoiceId": "TS-XRPL-IOU-SEQUENCE-V1",
+          "destinationTag": 24680
+        }
+      },
+      "paymentPayload": {
+        "x402Version": 2,
+        "payload": {
+          "signedTxBlob": "12000024000000072E00006068201B000003EC50114F5A7B4BC888E9C1C94BB9A3F0B6B32701AFE1C38316C474414048C8B986B55761D4C3BAF82D03A000524C555344000000000000000000000000000000FCF4DD8C64636BC503F4A58DC6C684D2C7C3C24F68400000000000000C69D4C3BAF82D03A000524C555344000000000000000000000000000000FCF4DD8C64636BC503F4A58DC6C684D2C7C3C24F7321ED951BF8B3B7C8AA4BC1B91790FC1B3FF7155CD729C2E6F038A93F5F3B9035DD85744040580919EF41EF28AF55A419FAFB4C809778B91309A92E983CE81EE56448621FAA6B66F02418A6766B12471173D0430018BD05259A7D13B95551B0A65011C0088114A8683DC013F856ACCDD629E0730E9FBB707D0D1B8314A509149915BBDDCB1D46C30BBA9D3F496C3659AA"
+        },
+        "accepted": {
+          "scheme": "exact",
+          "network": "xrpl:1",
+          "asset": "524C555344000000000000000000000000000000",
+          "amount": "10.5",
+          "payTo": "rGsd42GGEq1tJBPQ3Aoj9iyePZbxiX5Nrv",
+          "maxTimeoutSeconds": 60,
+          "extra": {
+            "areFeesSponsored": false,
+            "assetTransferMethod": "sequence",
+            "issuer": "rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV",
+            "invoiceId": "TS-XRPL-IOU-SEQUENCE-V1",
+            "destinationTag": 24680
+          }
+        }
+      },
+      "expectedTransaction": {
+        "TransactionType": "Payment",
+        "Sequence": 7,
+        "DestinationTag": 24680,
+        "LastLedgerSequence": 1004,
+        "InvoiceID": "4F5A7B4BC888E9C1C94BB9A3F0B6B32701AFE1C38316C474414048C8B986B557",
+        "Amount": {
+          "value": "10.5",
+          "currency": "524C555344000000000000000000000000000000",
+          "issuer": "rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV"
+        },
+        "Fee": "12",
+        "SendMax": {
+          "value": "10.5",
+          "currency": "524C555344000000000000000000000000000000",
+          "issuer": "rQhWct2fv4Vc4KRjRgMrxa8xPN9Zx9iLKV"
+        },
+        "SigningPubKey": "ED951BF8B3B7C8AA4BC1B91790FC1B3FF7155CD729C2E6F038A93F5F3B9035DD85",
+        "TxnSignature": "40580919EF41EF28AF55A419FAFB4C809778B91309A92E983CE81EE56448621FAA6B66F02418A6766B12471173D0430018BD05259A7D13B95551B0A65011C008",
+        "Account": "rGMTQpyhaDwWTqmw4dcYHj5NPJhtWNhtRW",
+        "Destination": "rGsd42GGEq1tJBPQ3Aoj9iyePZbxiX5Nrv"
+      }
+    },
+    {
+      "name": "xrp-ticket-sequence-master-key",
+      "walletFixture": {
+        "accountEntropyHex": "000102030405060708090A0B0C0D0E0F"
+      },
+      "payer": "rGMTQpyhaDwWTqmw4dcYHj5NPJhtWNhtRW",
+      "signingKeyAddress": "rGMTQpyhaDwWTqmw4dcYHj5NPJhtWNhtRW",
+      "ledgerState": {
+        "currentLedgerIndex": 990,
+        "accountSequence": 7,
+        "ticketSequence": 55,
+        "regularKey": null,
+        "masterKeyDisabled": false
+      },
+      "clientOptions": {
+        "feeDrops": "12",
+        "currentLedgerIndex": 990,
+        "accountSequence": 7,
+        "ticketSequence": 55
+      },
+      "paymentRequirements": {
+        "scheme": "exact",
+        "network": "xrpl:1",
+        "asset": "XRP",
+        "amount": "1000",
+        "payTo": "rGsd42GGEq1tJBPQ3Aoj9iyePZbxiX5Nrv",
+        "maxTimeoutSeconds": 60,
+        "extra": {
+          "areFeesSponsored": false,
+          "assetTransferMethod": "ticketSequence",
+          "invoiceId": "TS-XRPL-TICKET-V1"
+        }
+      },
+      "paymentPayload": {
+        "x402Version": 2,
+        "payload": {
+          "signedTxBlob": "1200002400000000201B000003EC202900000037501151189D0A952BDEF984B4B0F2B79C5D4D0690D03E5847AB519BEA89421F569CD56140000000000003E868400000000000000C7321ED951BF8B3B7C8AA4BC1B91790FC1B3FF7155CD729C2E6F038A93F5F3B9035DD857440EB13EECA5FACEF386F2EAC821DE80AAB872D5124A39B07F59FD07AEE59EE4472A4BA5FE80EC1CD562EF91579B7D4254E8D69629D1A6BC49464A28BEDB508320C8114A8683DC013F856ACCDD629E0730E9FBB707D0D1B8314A509149915BBDDCB1D46C30BBA9D3F496C3659AA"
+        },
+        "accepted": {
+          "scheme": "exact",
+          "network": "xrpl:1",
+          "asset": "XRP",
+          "amount": "1000",
+          "payTo": "rGsd42GGEq1tJBPQ3Aoj9iyePZbxiX5Nrv",
+          "maxTimeoutSeconds": 60,
+          "extra": {
+            "areFeesSponsored": false,
+            "assetTransferMethod": "ticketSequence",
+            "invoiceId": "TS-XRPL-TICKET-V1"
+          }
+        }
+      },
+      "expectedTransaction": {
+        "TransactionType": "Payment",
+        "Sequence": 0,
+        "LastLedgerSequence": 1004,
+        "TicketSequence": 55,
+        "InvoiceID": "51189D0A952BDEF984B4B0F2B79C5D4D0690D03E5847AB519BEA89421F569CD5",
+        "Amount": "1000",
+        "Fee": "12",
+        "SigningPubKey": "ED951BF8B3B7C8AA4BC1B91790FC1B3FF7155CD729C2E6F038A93F5F3B9035DD85",
+        "TxnSignature": "EB13EECA5FACEF386F2EAC821DE80AAB872D5124A39B07F59FD07AEE59EE4472A4BA5FE80EC1CD562EF91579B7D4254E8D69629D1A6BC49464A28BEDB508320C",
+        "Account": "rGMTQpyhaDwWTqmw4dcYHj5NPJhtWNhtRW",
+        "Destination": "rGsd42GGEq1tJBPQ3Aoj9iyePZbxiX5Nrv"
+      }
+    },
+    {
+      "name": "xrp-sequence-regular-key",
+      "walletFixture": {
+        "accountEntropyHex": "101112131415161718191A1B1C1D1E1F",
+        "signingEntropyHex": "202122232425262728292A2B2C2D2E2F"
+      },
+      "payer": "rM2a5NiwBDRxoWCTnisrGaGGfmXC2w8FaW",
+      "signingKeyAddress": "rfUom3iQifHWyw2KwH1fg7AKUYQBW73U5H",
+      "ledgerState": {
+        "currentLedgerIndex": 990,
+        "accountSequence": 11,
+        "ticketSequence": null,
+        "regularKey": "rfUom3iQifHWyw2KwH1fg7AKUYQBW73U5H",
+        "masterKeyDisabled": true
+      },
+      "clientOptions": {
+        "feeDrops": "12",
+        "currentLedgerIndex": 990,
+        "accountSequence": 11,
+        "ticketSequence": null
+      },
+      "paymentRequirements": {
+        "scheme": "exact",
+        "network": "xrpl:1",
+        "asset": "XRP",
+        "amount": "1000",
+        "payTo": "rGsd42GGEq1tJBPQ3Aoj9iyePZbxiX5Nrv",
+        "maxTimeoutSeconds": 60,
+        "extra": {
+          "areFeesSponsored": false,
+          "assetTransferMethod": "sequence",
+          "invoiceId": "TS-XRPL-REGULAR-KEY-V1"
+        }
+      },
+      "paymentPayload": {
+        "x402Version": 2,
+        "payload": {
+          "signedTxBlob": "120000240000000B201B000003EC5011660FC7ECAE6CD2DF6A3F359B46C03DCBFC3B12340CAA8F3A3513B7A09BB1DD7E6140000000000003E868400000000000000C7321ED6F4E09D2665B4F11F8D847CA81C616761D31AF38DC09F8B529DB5950B0D710927440373E2EBE85B3CE3127C2035CF5A7E4821CC2D6D43EF76FA5E6991C6153E1E28D1071B591E89BC231F102176B75412315C1E7398A1989676D492FDD3B14F49B078114E1A5027D8AE195C975364FCD00F695B760AC33598314A509149915BBDDCB1D46C30BBA9D3F496C3659AA"
+        },
+        "accepted": {
+          "scheme": "exact",
+          "network": "xrpl:1",
+          "asset": "XRP",
+          "amount": "1000",
+          "payTo": "rGsd42GGEq1tJBPQ3Aoj9iyePZbxiX5Nrv",
+          "maxTimeoutSeconds": 60,
+          "extra": {
+            "areFeesSponsored": false,
+            "assetTransferMethod": "sequence",
+            "invoiceId": "TS-XRPL-REGULAR-KEY-V1"
+          }
+        }
+      },
+      "expectedTransaction": {
+        "TransactionType": "Payment",
+        "Sequence": 11,
+        "LastLedgerSequence": 1004,
+        "InvoiceID": "660FC7ECAE6CD2DF6A3F359B46C03DCBFC3B12340CAA8F3A3513B7A09BB1DD7E",
+        "Amount": "1000",
+        "Fee": "12",
+        "SigningPubKey": "ED6F4E09D2665B4F11F8D847CA81C616761D31AF38DC09F8B529DB5950B0D71092",
+        "TxnSignature": "373E2EBE85B3CE3127C2035CF5A7E4821CC2D6D43EF76FA5E6991C6153E1E28D1071B591E89BC231F102176B75412315C1E7398A1989676D492FDD3B14F49B07",
+        "Account": "rM2a5NiwBDRxoWCTnisrGaGGfmXC2w8FaW",
+        "Destination": "rGsd42GGEq1tJBPQ3Aoj9iyePZbxiX5Nrv"
+      }
+    }
+  ]
+}

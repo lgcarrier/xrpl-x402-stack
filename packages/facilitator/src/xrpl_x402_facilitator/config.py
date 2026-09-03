@@ -12,22 +12,25 @@ class Settings(BaseSettings):
     FACILITATOR_BEARER_TOKEN: SecretStr | None = None
     REDIS_URL: SecretStr
     NETWORK_ID: str = "xrpl:0"
-    SETTLEMENT_MODE: Literal["optimistic", "validated"] = "validated"
+    SETTLEMENT_MODE: str | None = None
     VALIDATION_TIMEOUT: int = 15
     MIN_XRP_DROPS: int = 1000
+    MAX_FEE_DROPS: int = 1000
     ALLOWED_ISSUED_ASSETS: str = ""
     ENABLE_API_DOCS: bool = False
+    ENABLE_BAZAAR: bool = True
+    DISCOVERY_RETENTION_SECONDS: int = 604800
     MAX_REQUEST_BODY_BYTES: int = 32768
     REPLAY_PROCESSED_TTL_SECONDS: int = 604800
-    MAX_PAYMENT_LEDGER_WINDOW: int = 20
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @field_validator(
         "VALIDATION_TIMEOUT",
+        "MAX_FEE_DROPS",
+        "DISCOVERY_RETENTION_SECONDS",
         "MAX_REQUEST_BODY_BYTES",
         "REPLAY_PROCESSED_TTL_SECONDS",
-        "MAX_PAYMENT_LEDGER_WINDOW",
     )
     @classmethod
     def _validate_positive_int(cls, value: int) -> int:
@@ -46,12 +49,18 @@ class Settings(BaseSettings):
         return self.GATEWAY_AUTH_MODE == "redis_gateways"
 
     @model_validator(mode="after")
-    def _validate_auth_settings(self) -> "Settings":
-        if self.GATEWAY_AUTH_MODE == "single_token":
-            if self.FACILITATOR_BEARER_TOKEN is None:
-                raise ValueError(
-                    "FACILITATOR_BEARER_TOKEN is required when GATEWAY_AUTH_MODE=single_token"
-                )
+    def _validate_settings(self) -> "Settings":
+        if self.SETTLEMENT_MODE is not None:
+            raise ValueError(
+                "SETTLEMENT_MODE was removed in 0.2.0; settlement always requires validated tesSUCCESS"
+            )
+        if (
+            self.GATEWAY_AUTH_MODE == "single_token"
+            and self.FACILITATOR_BEARER_TOKEN is None
+        ):
+            raise ValueError(
+                "FACILITATOR_BEARER_TOKEN is required when GATEWAY_AUTH_MODE=single_token"
+            )
         return self
 
 

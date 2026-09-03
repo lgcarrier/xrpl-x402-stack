@@ -66,3 +66,9 @@ def test_allowed_issued_assets_default_remains_empty() -> None:
     settings = build_settings()
 
     assert settings.ALLOWED_ISSUED_ASSETS == ""
+
+
+@pytest.mark.parametrize("value", ["optimistic", "validated"])
+def test_removed_settlement_mode_fails_startup(value: str) -> None:
+    with pytest.raises(ValueError, match="SETTLEMENT_MODE was removed"):
+        build_settings(SETTLEMENT_MODE=value)

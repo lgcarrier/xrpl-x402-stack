@@ -1,52 +1,27 @@
 # xrpl-x402-facilitator
 
-`xrpl-x402-facilitator` is the FastAPI verifier/settler service in the Open XRPL x402 Stack.
-
-## Install
+Non-custodial x402 v2 facilitator for exact XRPL payments.
 
 ```bash
-pip install xrpl-x402-facilitator
-```
-
-## Run
-
-The CLI starts `xrpl_x402_facilitator.main:app`:
-
-```bash
-export MY_DESTINATION_ADDRESS=rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe
-export FACILITATOR_BEARER_TOKEN=replace-with-your-token
+export MY_DESTINATION_ADDRESS=rMerchant
+export FACILITATOR_BEARER_TOKEN=replace-me
 export REDIS_URL=redis://127.0.0.1:6379/0
-xrpl-x402-facilitator --host 127.0.0.1 --port 8000
+export NETWORK_ID=xrpl:1
+xrpl-x402-facilitator
 ```
 
-Minimal import surface:
+The service exposes `/supported`, `/verify`, `/settle`,
+`/discovery/resources`, and `/discovery/search`. Protocol-valid verification or
+settlement failures return HTTP 200 with `isValid: false` or `success: false`;
+malformed/auth failures use 4xx and infrastructure failures use 5xx.
 
-```python
-from xrpl_x402_facilitator import create_app
+Verification enforces signature authorization, sequence/ticket state, ledger
+expiry, fee cap, destination, asset/issuer/amount, invoice, tag, NetworkID,
+forbidden fields, simulation or targeted balance checks, and exact accepted
+requirements.
 
-app = create_app()
-```
+Settlement succeeds only for validated `tesSUCCESS`. Redis atomically reserves
+the canonical signed transaction hash and retains uncertain submissions until
+ledger expiry. Identical retries reconcile without rebroadcasting.
 
-## Stable HTTP Contract
-
-- `GET /health`
-- `GET /supported`
-- `POST /verify`
-- `POST /settle`
-
-## Public API
-
-- `create_app(...)`
-- `xrpl_x402_facilitator.main:app`
-- `xrpl-x402-facilitator`
-
-## Compatibility
-
-- Python `3.12`
-- `xrpl-py==4.5.0`
-- Default network is `xrpl:0`; local demos commonly target `xrpl:1`
-- `x402` is not required to run the facilitator service
-
-## Provenance
-
-The implementation is independently developed for the open `x402` protocol and does not copy `x402-xrpl`.
+`SETTLEMENT_MODE` was removed; configuring it fails startup.

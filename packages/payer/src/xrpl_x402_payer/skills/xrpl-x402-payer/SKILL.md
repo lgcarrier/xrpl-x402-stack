@@ -15,8 +15,11 @@ That installs this skill into `~/.agents/skills/xrpl-x402-payer/SKILL.md`.
 Use the CLI for one-off requests:
 
 ```bash
-xrpl-x402 pay https://merchant.example/premium --amount 0.001 --asset XRP
+xrpl-x402 pay https://merchant.example/premium --asset XRP --max-spend 1000
 ```
+
+The server challenge supplies the exact payment amount. For XRP, `--max-spend`
+is an explicit per-payment cap in drops.
 
 Use the local forward proxy when repeated requests should auto-pay:
 

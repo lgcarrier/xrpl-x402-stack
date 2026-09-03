@@ -13,9 +13,10 @@ services:
       FACILITATOR_BEARER_TOKEN: ${FACILITATOR_BEARER_TOKEN:-local-facilitator-token}
       REDIS_URL: redis://redis:6379/0
       NETWORK_ID: ${NETWORK_ID:-xrpl:1}
-      SETTLEMENT_MODE: ${SETTLEMENT_MODE:-validated}
       ALLOWED_ISSUED_ASSETS: ${ALLOWED_ISSUED_ASSETS:-}
       ENABLE_API_DOCS: ${ENABLE_API_DOCS:-false}
+      MAX_FEE_DROPS: ${MAX_FEE_DROPS:-1000}
+      ENABLE_BAZAAR: ${ENABLE_BAZAAR:-true}
     restart: unless-stopped
   merchant:
     build: .
@@ -47,7 +48,9 @@ services:
       XRPL_RPC_URL: ${XRPL_RPC_URL:-https://s.altnet.rippletest.net:51234}
       XRPL_NETWORK: ${XRPL_NETWORK:-xrpl:1}
       XRPL_WALLET_SEED: ${XRPL_WALLET_SEED:-}
-      PAYMENT_ASSET: ${PAYMENT_ASSET:-XRP:native}
+      PAYMENT_ASSET: ${PAYMENT_ASSET:-XRP}
+      PAYMENT_ASSET_ISSUER: ${PAYMENT_ASSET_ISSUER:-}
+      PAYMENT_MAX_SPEND: ${PAYMENT_MAX_SPEND:-1000}
   buyer-agent-mcp:
     profiles: ["buyer-agent-mcp"]
     build: .
@@ -59,7 +62,6 @@ services:
       XRPL_RPC_URL: ${XRPL_RPC_URL:-https://s.altnet.rippletest.net:51234}
       XRPL_NETWORK: ${XRPL_NETWORK:-xrpl:1}
       XRPL_WALLET_SEED: ${XRPL_WALLET_SEED:-}
-      XRPL_X402_MAX_SPEND: ${XRPL_X402_MAX_SPEND:-0.01}
   redis:
     image: redis:7-alpine
     healthcheck:
