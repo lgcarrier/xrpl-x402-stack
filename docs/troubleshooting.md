@@ -1,92 +1,54 @@
 # Troubleshooting
 
-## `XRPL_WALLET_SEED is required`
+## Facilitator startup rejects `SETTLEMENT_MODE`
 
-Run `python -m devtools.quickstart` first, or make sure `.env.quickstart` includes `XRPL_WALLET_SEED`.
+Remove the variable. Version 0.2.0 has one settlement policy: validated
+`tesSUCCESS` only.
 
-## Quickstart cannot find a healthy public XRPL Testnet RPC endpoint
+## The buyer still receives HTTP 402
 
-The quickstart and top-up helpers probe a small list of public Testnet JSON-RPC servers by default.
-If all of them are unavailable from your machine, pin one explicitly:
+- Confirm merchant and facilitator bearer tokens match.
+- Confirm the payer and requirement use the same CAIP-2 XRPL network.
+- For XRP, set `PAYMENT_ASSET=XRP` and an integer-drops
+  `PAYMENT_MAX_SPEND`.
+- For an IOU, also set `PAYMENT_ASSET_ISSUER`; it must match
+  `extra.issuer` exactly.
+- Inspect `PAYMENT-REQUIRED` and ensure the response has no legacy body fields.
 
-```bash
-export XRPL_TESTNET_RPC_URL=https://your-testnet-rpc.example/
-python -m devtools.quickstart
-```
+## Invoice or destination tag mismatch
 
-You can also pass `--xrpl-rpc-url ...` to `devtools.quickstart`, `devtools.rlusd_topup`, or
-`devtools.usdc_topup`.
+The requirement advertises `extra.invoiceId` and/or `extra.destinationTag`.
+The signer hashes the invoice text with SHA-256 for XRPL `InvoiceID` and copies
+the tag exactly. Do not put invoice IDs beside `signedTxBlob` in the payload.
 
-For the generated runtime stack, keep using `XRPL_RPC_URL` in `.env.quickstart` or your shell if
-you want to pin the buyer, payer, or facilitator to a specific RPC provider.
+## `settlement_pending`
 
-## Docker Compose starts, but the buyer still gets `402`
+Retry the identical settlement envelope. Keep the same payment identifier and
+signed payload. Do not create a replacement transaction and do not rerun an
+unsafe handler. The facilitator reconciles the reserved hash without
+rebroadcasting.
 
-- confirm the facilitator and merchant are using the same `FACILITATOR_BEARER_TOKEN`
-- make sure the buyer is using the same `XRPL_NETWORK` as the merchant route
-- for issued assets, confirm `PAYMENT_ASSET` matches the merchant `PRICE_ASSET_CODE` and `PRICE_ASSET_ISSUER`
-- inspect the decoded `PAYMENT-REQUIRED` challenge and the retry shape described in [Header Contract](how-it-works/header-contract.md)
-- confirm the facilitator reports the expected asset and settlement mode from `GET /supported`
+## Payment identifier conflict (HTTP 409)
 
-## `Provided invoice_id does not match transaction InvoiceID`
+The identifier was already bound to different accepted requirements or
+resource data. Generate a new identifier for the new logical operation.
 
-The buyer sent an `invoice_id` in the x402 payload that does not match the XRPL transaction `InvoiceID`.
+## Issued asset rejected
 
-Fix one of these:
+RLUSD must use the current official issuer. The former Testnet issuer is
+rejected explicitly. USDC and custom IOUs must be present in
+`ALLOWED_ISSUED_ASSETS=CODE:ISSUER` on the facilitator and in an explicit
+issuer-aware payer spend limit.
 
-- generate both values from the same source, for example with `invoice_id_factory` on the client
-- stop sending a payload `invoice_id` if you do not need explicit request correlation
-- inspect the signed transaction you are generating and confirm it actually contains the expected `InvoiceID`
+## Simulation unavailable
 
-If you omit `invoice_id` entirely, the facilitator falls back to a hash-derived value.
+The facilitator performs targeted XRP balance or IOU trust-line checks and
+returns `extra.verificationPath: targetedChecks`. Treat repeated simulation
+outages as degraded infrastructure even when targeted checks pass.
 
-## The facilitator cannot start
+## Testnet helper problems
 
-- confirm Redis is reachable at `redis://redis:6379/0` inside Docker Compose
-- confirm `MY_DESTINATION_ADDRESS` and `FACILITATOR_BEARER_TOKEN` are set
-- if you are using `redis_gateways`, confirm your bearer token exists in Redis with `status=active` and a non-empty `gateway_id`
-
-## `Transaction already processed (replay attack)`
-
-The facilitator saw the same `invoice_id` or signed transaction blob more than once.
-
-Check [Replay And Freshness](how-it-works/replay-and-freshness.md) if you need the exact Redis behavior. In practice:
-
-- do not reuse the same signed transaction blob for multiple paid requests
-- generate a fresh `invoice_id` per request when you want explicit correlation
-- if a prior settlement failed before returning to the buyer, inspect facilitator logs before retrying blindly
-
-## `Transaction LastLedgerSequence required in redis_gateways mode`
-
-Public-gateway mode requires every payment to carry a bounded `LastLedgerSequence`.
-
-Fix one of these:
-
-- enable XRPL autofill on the buyer signer so the transaction gets a ledger bound automatically
-- set `LastLedgerSequence` yourself before signing
-- switch back to `single_token` mode for local-only demos
-
-The full rule set is documented in [Replay And Freshness](how-it-works/replay-and-freshness.md).
-
-## RLUSD claims are rate limited
-
-Rerun `python -m devtools.rlusd_topup` later. The helper records local cooldown state under `.live-test-wallets/rlusd-claim-state.json`.
-
-## Issued-asset demo fails with `tecPATH_DRY` or the buyer wallet is unfunded
-
-If the demo trace shows the shared merchant wallet holding RLUSD or USDC while
-the buyer wallet has `0`, the derived env file is using the dedicated issued-asset
-buyer seed but that wallet has not been funded yet.
-
-Recover and bridge funds, then rerun the demo:
-
-- RLUSD: `python -m devtools.rlusd_topup`
-- USDC: `python -m devtools.usdc_topup`
-
-The helpers recover tracked claim wallets, sweep funds back into the shared
-merchant wallet, and then fund the dedicated buyer wallet that
-`.env.quickstart.rlusd` or `.env.quickstart.usdc` points at.
-
-## USDC does not appear after the Circle faucet claim
-
-Rerun `python -m devtools.usdc_topup` after the faucet transfer is visible on XRPL Testnet. The helper is designed to recover and sweep later claims.
+Pin `XRPL_TESTNET_RPC_URL` when public endpoints are unhealthy. Rerun
+`devtools.rlusd_topup` after a faucet cooldown. For USDC, complete the Circle
+faucet transfer and rerun `devtools.usdc_topup`; report USDC acceptance as
+unavailable until the wallet is actually funded.

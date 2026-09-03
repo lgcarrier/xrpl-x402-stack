@@ -1,66 +1,25 @@
 # xrpl-x402-client
 
-`xrpl-x402-client` is the buyer-side Python SDK for the Open XRPL x402 Stack.
-
-## Install
-
-```bash
-pip install xrpl-x402-client
-```
-
-Optional Coinbase Python `x402` interop:
-
-```bash
-pip install "xrpl-x402-client[x402]"
-```
-
-## Quick Start
+Client mechanism for x402 v2 exact XRPL payments.
 
 ```python
-import asyncio
+from x402 import x402Client
+from xrpl_x402_client import register_exact_xrpl_client
 
-from xrpl.wallet import Wallet
-
-from xrpl_x402_client import XRPLPaymentSigner, wrap_httpx_with_xrpl_payment
-
-wallet = Wallet.create()
-signer = XRPLPaymentSigner(
-    wallet,
-    network="xrpl:1",
-    autofill_enabled=False,
-)
-
-async def fetch_paid_resource() -> None:
-    async with wrap_httpx_with_xrpl_payment(
-        signer,
-        base_url="https://merchant.example",
-    ) as client:
-        response = await client.get("/premium")
-        print(response.status_code, response.text)
-
-asyncio.run(fetch_paid_resource())
+client = register_exact_xrpl_client(x402Client(), signer)
+client.set_spend_controls({"max_amount_per_payment": "$1"})
 ```
 
-## Public API
+`ExactXRPLClientScheme` constructs and signs sequence or ticket payments,
+derives `LastLedgerSequence` from the timeout, binds custom networks through
+`NetworkID`, hashes advertised invoice IDs, and emits only
+`{"signedTxBlob": "..."}` as the scheme payload.
 
-- `decode_payment_required(...)`
-- `select_payment_option(...)`
-- `build_payment_signature(...)`
-- `XRPLPaymentSigner`
-- `XRPLPaymentTransport`
-- `wrap_httpx_with_xrpl_payment(...)`
-- Optional adapters under `xrpl_x402_client.adapters.x402`
+Use `XRPLAssetSpendLimit` for XRP, USDC, or custom IOUs. These assets are not
+silently authorized by the default pegged-asset policy.
 
-## Compatibility
-
-- Python `3.12`
-- `xrpl-py==4.5.0`
-- Optional adapter extra pins `x402==2.3.0`
-- Examples target `xrpl:1`; mainnet usage uses `xrpl:0`
-
-When you run the repo buyer example on `xrpl:1`, leave `XRPL_RPC_URL` unset to auto-select a healthy
-public Testnet RPC, or set it explicitly to pin a provider.
-
-## Provenance
-
-The implementation is independently developed for the open `x402` protocol and does not copy `x402-xrpl`.
+The `XRPLPaymentTransport` and `wrap_httpx_with_xrpl_payment` helpers use the
+official `x402AsyncTransport`, which retries a replayable protected request at
+most once.
+Custom async streaming bodies are sent exactly once and a `402` is returned to
+the caller without buffering, signing, or automatic retry.

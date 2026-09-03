@@ -1,114 +1,166 @@
 from __future__ import annotations
 
-import base64
-import binascii
-from decimal import Decimal
+import hashlib
 import json
+import math
 import re
-from typing import TYPE_CHECKING, Any, TypeVar
+from decimal import Decimal, InvalidOperation
+from typing import Any
 
-from pydantic import BaseModel, TypeAdapter, ValidationError
+from xrpl_x402_core.assets import (
+    find_default_asset,
+    normalize_currency_code,
+    xrpl_currency_code,
+)
+from xrpl_x402_core.models import (
+    ExactXRPLExtra,
+    ExactXRPLPayload,
+    PaymentPayload,
+    PaymentRequirements,
+    ResourceInfo,
+)
 
-from xrpl_x402_core.assets import asset_identifier_from_parts, normalize_currency_code
-
-if TYPE_CHECKING:
-    from xrpl_x402_core.models import StructuredAmount, XRPLAmount, XRPLAsset, XRPLPaymentOption
-
-
-CAIP_2_NETWORK_PATTERN = re.compile(r"^xrpl:[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
-
-ModelType = TypeVar("ModelType", bound=BaseModel)
+CAIP_2_NETWORK_PATTERN = re.compile(r"^xrpl:(0|[1-9][0-9]*)$")
+INTEGER_AMOUNT_PATTERN = re.compile(r"^(0|[1-9][0-9]*)$")
+DECIMAL_AMOUNT_PATTERN = re.compile(r"^(0|[1-9][0-9]*)(\.[0-9]+)?$")
+XRPL_LEDGER_CLOSE_SECONDS = 5
 
 
 def is_valid_xrpl_network(network: str) -> bool:
-    return bool(CAIP_2_NETWORK_PATTERN.fullmatch(network))
+    return bool(CAIP_2_NETWORK_PATTERN.fullmatch(str(network).strip()))
 
 
-def canonical_asset_identifier(asset: "XRPLAsset") -> str:
-    return asset_identifier_from_parts(asset.code, asset.issuer)
+def parse_xrpl_network_id(network: str) -> int:
+    normalized = str(network).strip()
+    if not is_valid_xrpl_network(normalized):
+        raise ValueError("network must be a numeric CAIP-2 xrpl:<reference> identifier")
+    return int(normalized.partition(":")[2])
 
 
-def build_xrpl_extra(asset: "XRPLAsset", amount: "XRPLAmount") -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "asset": asset.model_dump(exclude_none=True),
-        "assetId": canonical_asset_identifier(asset),
-        "amount": amount.model_dump(by_alias=True, exclude_none=True),
-    }
-    return {"xrpl": payload}
-
-
-def encode_model_to_base64(model: BaseModel) -> str:
-    payload = model.model_dump_json(by_alias=True, exclude_none=True)
-    return base64.b64encode(payload.encode("utf-8")).decode("ascii")
-
-
-def decode_model_from_base64(raw_value: str, model_type: type[ModelType]) -> ModelType:
-    try:
-        decoded = base64.b64decode(raw_value, validate=True)
-    except (binascii.Error, ValueError) as exc:
-        raise ValueError("Header is not valid Base64") from exc
-
-    try:
-        decoded_json = json.loads(decoded.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ValueError("Header is not valid UTF-8 JSON") from exc
-
-    try:
-        return TypeAdapter(model_type).validate_python(decoded_json)
-    except ValidationError as exc:
-        raise ValueError("Header payload does not match the x402 schema") from exc
-
-
-def payment_option_matches(
-    option: "XRPLPaymentOption",
-    *,
-    destination: str,
-    asset: "XRPLAsset",
-    amount: "XRPLAmount",
-) -> bool:
-    if option.pay_to != destination:
-        return False
-    if canonical_asset_identifier(option.asset) != canonical_asset_identifier(asset):
-        return False
-    if option.amount.unit != amount.unit:
-        return False
-    if option.amount.drops != amount.drops:
-        return False
-    if option.amount.unit == "issued" and Decimal(option.amount.value) != Decimal(amount.value):
-        return False
-    if option.amount.unit != "issued" and option.amount.value != amount.value:
-        return False
-    return True
-
-
-def amount_from_structured_amount(amount: "StructuredAmount") -> "XRPLAmount":
-    from xrpl_x402_core.models import XRPLAmount
-
-    return XRPLAmount(
-        value=amount.value,
-        unit=amount.unit,
-        drops=amount.drops,
+def get_max_last_ledger_sequence(
+    current_ledger: int, requirements: PaymentRequirements
+) -> int:
+    return (
+        current_ledger
+        + math.ceil(requirements.max_timeout_seconds / XRPL_LEDGER_CLOSE_SECONDS)
+        + 2
     )
 
 
-def xrpl_asset_from_identifier(identifier: str) -> "XRPLAsset":
-    from xrpl_x402_core.models import XRPLAsset
-
-    asset = asset_identifier_from_parts(*_parse_identifier_parts(identifier))
-    code, _, issuer = asset.partition(":")
-    if issuer == "native":
-        return XRPLAsset(code=code)
-    return XRPLAsset(code=code, issuer=issuer)
+def invoice_id_to_invoice_id_field(invoice_id: str) -> str:
+    normalized = str(invoice_id)
+    if not normalized:
+        raise ValueError("extra.invoiceId must be non-empty")
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest().upper()
 
 
-def _parse_identifier_parts(identifier: str) -> tuple[str, str | None]:
-    code, separator, issuer = identifier.partition(":")
-    normalized_code = normalize_currency_code(code)
-    if not separator:
-        raise ValueError("Asset identifier must use CODE:ISSUER or CODE:native")
-    normalized_issuer = issuer.strip()
-    if normalized_issuer == "native":
-        return normalized_code, None
-    if not normalized_issuer:
-        raise ValueError("Asset identifier issuer is required")
-    return normalized_code, normalized_issuer
+def signed_transaction_hash(signed_tx_blob: str) -> str:
+    """Return the canonical XRPL transaction id for a signed blob."""
+
+    from xrpl.core import binarycodec
+
+    binarycodec.decode(signed_tx_blob)
+    return hashlib.sha512(
+        bytes.fromhex("54584E00" + signed_tx_blob)
+    ).hexdigest()[:64].upper()
+
+
+def exact_xrpl_payload(payload: PaymentPayload) -> ExactXRPLPayload:
+    return ExactXRPLPayload.model_validate(payload.payload)
+
+
+def exact_xrpl_extra(requirements: PaymentRequirements) -> ExactXRPLExtra:
+    return ExactXRPLExtra.model_validate(requirements.extra or {})
+
+
+def compare_decimal_strings(left: str, right: str) -> int:
+    try:
+        left_value = Decimal(left)
+        right_value = Decimal(right)
+    except InvalidOperation as exc:
+        raise ValueError("XRPL IOU amount must be a decimal string") from exc
+    return (left_value > right_value) - (left_value < right_value)
+
+
+def validate_requirements_shape(
+    requirements: PaymentRequirements,
+) -> ExactXRPLExtra:
+    if requirements.scheme != "exact":
+        raise ValueError(f"Unsupported scheme: {requirements.scheme}")
+    if not is_valid_xrpl_network(str(requirements.network)):
+        raise ValueError(f"Unsupported XRPL network: {requirements.network}")
+    if requirements.max_timeout_seconds <= 0:
+        raise ValueError("maxTimeoutSeconds must be greater than zero")
+    try:
+        canonical_asset = xrpl_currency_code(requirements.asset)
+    except ValueError as exc:
+        raise ValueError("Invalid XRPL asset currency code") from exc
+    if requirements.asset != canonical_asset:
+        raise ValueError(
+            "XRPL wire assets must use XRP, an uppercase three-character "
+            "currency code, or an uppercase 40-character hexadecimal code"
+        )
+    if (
+        requirements.asset != "XRP"
+        and normalize_currency_code(requirements.asset) == "XRP"
+    ):
+        raise ValueError("XRP cannot be represented as an issued currency")
+    raw_extra = requirements.extra or {}
+    extra = exact_xrpl_extra(requirements)
+    if raw_extra.get("areFeesSponsored") is not False:
+        raise ValueError("XRPL exact payments require extra.areFeesSponsored to be false")
+    method = extra.asset_transfer_method or "sequence"
+    if method not in {"sequence", "ticketSequence"}:
+        raise ValueError(f"Unsupported assetTransferMethod: {method}")
+    if requirements.asset == "XRP":
+        if not INTEGER_AMOUNT_PATTERN.fullmatch(requirements.amount):
+            raise ValueError("XRPL native payments require an integer drops amount")
+        if int(requirements.amount) <= 0:
+            raise ValueError("XRPL exact payment amount must be greater than zero")
+        if extra.issuer is not None:
+            raise ValueError("XRPL native payments must not include extra.issuer")
+    else:
+        if not extra.issuer:
+            raise ValueError("XRPL IOU payments require extra.issuer")
+        default = find_default_asset(
+            requirements.asset, str(requirements.network)
+        )
+        if default is not None and extra.issuer != default.get("issuer"):
+            raise ValueError(
+                f"XRPL {default['symbol']} payments require extra.issuer "
+                f"to be {default['issuer']}"
+            )
+        if not DECIMAL_AMOUNT_PATTERN.fullmatch(requirements.amount):
+            raise ValueError("XRPL IOU payments require a decimal ledger amount")
+        if Decimal(requirements.amount) <= 0:
+            raise ValueError("XRPL exact payment amount must be greater than zero")
+    return extra
+
+
+def requirements_fingerprint(
+    payload: PaymentPayload,
+    requirements: PaymentRequirements,
+    *,
+    resource_method: str | None = None,
+    authoritative_resource: ResourceInfo | None = None,
+    resource_identity: str | None = None,
+) -> str:
+    resource_info = authoritative_resource or payload.resource
+    resource = (
+        resource_info.model_dump(by_alias=True, exclude_none=True)
+        if resource_info
+        else None
+    )
+    normalized: dict[str, Any] = {
+        "accepted": requirements.model_dump(by_alias=True, exclude_none=True),
+        "payload": payload.payload,
+        "resource": resource,
+        "extensions": payload.extensions,
+        "method": resource_method.upper() if resource_method else None,
+    }
+    if resource_identity is not None:
+        normalized["resourceIdentity"] = resource_identity
+    encoded = json.dumps(
+        normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()

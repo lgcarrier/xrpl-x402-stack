@@ -1,0 +1,37 @@
+name: Weekly x402 compatibility
+
+on:
+  schedule:
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  newest-upstream:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install stable project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Replace stable x402 with newest upstream source
+        run: |
+          pip install --force-reinstall --no-deps \
+            "x402 @ git+https://github.com/x402-foundation/x402.git@main#subdirectory=python/x402"
+
+      - name: Probe full non-live compatibility
+        run: |
+          python -c "import importlib.metadata as m; print(m.version('x402'))"
+          pytest -q -m "not live and not redis"

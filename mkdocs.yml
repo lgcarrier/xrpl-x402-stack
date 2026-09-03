@@ -35,6 +35,7 @@ extra_css:
 
 nav:
   - Home: index.md
+  - Migration 0.2: migration-0.2.md
   - Guided Quickstart:
       - Testnet XRP: quickstart/testnet-xrp.md
   - Asset Guides:
@@ -51,7 +52,7 @@ nav:
       - Header Contract: how-it-works/header-contract.md
       - Replay And Freshness: how-it-works/replay-and-freshness.md
   - Integrations:
-      - Coinbase x402 Adapters: integrations/x402-adapters.md
+      - Official x402 Adapters: integrations/x402-adapters.md
   - Troubleshooting: troubleshooting.md
   - Release:
       - Release Playbook: release.md

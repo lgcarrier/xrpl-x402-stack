@@ -8,4 +8,5 @@ editables>=0.5
 hatchling>=1.27
 pytest==8.3.3
 twine>=5,<7
-x402==2.3.0
+x402[extensions,mcp]==2.20.0
+mcp>=1,<2

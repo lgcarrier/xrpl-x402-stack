@@ -28,10 +28,9 @@ HOP_BY_HOP_HEADERS = {
 def create_proxy_app(
     *,
     target_base_url: str,
-    amount: float = 0.001,
-    asset: str = "XRP",
+    asset: str | None = None,
     issuer: str | None = None,
-    max_spend: float | None = None,
+    max_spend: str | None = None,
     dry_run: bool = False,
     transport=None,
     store: ReceiptStore | None = None,
@@ -62,7 +61,6 @@ def create_proxy_app(
             method=request.method,
             headers=forwarded_headers,
             content=body or None,
-            amount=amount,
             asset=asset,
             issuer=issuer,
             max_spend=max_spend,
@@ -96,15 +94,13 @@ def run_proxy(
     target_base_url: str,
     host: str = "127.0.0.1",
     port: int = 8787,
-    amount: float = 0.001,
-    asset: str = "XRP",
+    asset: str | None = None,
     issuer: str | None = None,
-    max_spend: float | None = None,
+    max_spend: str | None = None,
     dry_run: bool = False,
 ) -> None:
     app = create_proxy_app(
         target_base_url=target_base_url,
-        amount=amount,
         asset=asset,
         issuer=issuer,
         max_spend=max_spend,
@@ -127,10 +123,9 @@ class ProxyManager:
         target_base_url: str,
         host: str = "127.0.0.1",
         port: int = 8787,
-        amount: float = 0.001,
-        asset: str = "XRP",
+        asset: str | None = None,
         issuer: str | None = None,
-        max_spend: float | None = None,
+        max_spend: str | None = None,
         dry_run: bool = False,
     ) -> str:
         with self._lock:
@@ -144,7 +139,6 @@ class ProxyManager:
 
             app = create_proxy_app(
                 target_base_url=target_base_url,
-                amount=amount,
                 asset=asset,
                 issuer=issuer,
                 max_spend=max_spend,

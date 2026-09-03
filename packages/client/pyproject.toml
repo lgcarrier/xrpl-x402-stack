@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "xrpl-x402-client"
-version = "0.1.2"
+version = "0.2.0"
 description = "Buyer-side Python SDK for XRPL exact x402 payments"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.12"
@@ -25,12 +25,10 @@ classifiers = [
 dependencies = [
   "httpx==0.28.1",
   "pydantic>=2,<3",
+  "x402[extensions]==2.20.0",
   "xrpl-py==4.5.0",
-  "xrpl-x402-core>=0.1.2,<0.2.0",
+  "xrpl-x402-core==0.2.0",
 ]
-
-[project.optional-dependencies]
-x402 = ["x402==2.3.0"]
 
 [project.urls]
 Homepage = "https://github.com/lgcarrier/xrpl-x402-stack"
@@ -41,6 +39,7 @@ Changelog = "https://github.com/lgcarrier/xrpl-x402-stack/blob/main/CHANGELOG.md
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/xrpl_x402_client"]
+core-metadata-version = "2.4"
 
 [tool.hatch.build.hooks.custom]
 path = "build_hook.py"
@@ -49,6 +48,7 @@ path = "build_hook.py"
 "LICENSE" = "LICENSE"
 
 [tool.hatch.build.targets.sdist]
+core-metadata-version = "2.4"
 include = [
   "/src/xrpl_x402_client",
   "/README.md",

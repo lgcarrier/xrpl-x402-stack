@@ -1,193 +1,87 @@
 from __future__ import annotations
 
-from typing import Literal
+import asyncio
+from typing import Any
 
-import httpx
-from pydantic import BaseModel
-
-from xrpl_x402_core import (
-    FacilitatorSettleResponse as CoreFacilitatorSettleResponse,
-    FacilitatorSupportedResponse as CoreFacilitatorSupportedResponse,
-    FacilitatorVerifyResponse as CoreFacilitatorVerifyResponse,
-    XRPLAmount,
-    XRPLAsset,
-    amount_from_structured_amount,
+from x402.http import (
+    CreateHeadersAuthProvider,
+    FacilitatorConfig,
+    HTTPFacilitatorClient,
 )
-from xrpl_x402_middleware.exceptions import (
-    FacilitatorPaymentError,
-    FacilitatorProtocolError,
-    FacilitatorTransportError,
-)
+from x402.schemas import PaymentPayload, PaymentRequirements, SettleResponse
 
 
-class FacilitatorSupported(BaseModel):
-    network: str
-    assets: list[XRPLAsset]
-    settlement_mode: Literal["optimistic", "validated"]
+class XRPLFacilitatorClient(HTTPFacilitatorClient):
+    """Official HTTP facilitator client with bounded pending reconciliation."""
 
-
-class FacilitatorVerifyResponse(BaseModel):
-    valid: bool
-    invoice_id: str
-    amount: str
-    asset: XRPLAsset
-    amount_details: XRPLAmount
-    payer: str
-    destination: str
-    message: str
-
-
-class FacilitatorSettleResponse(BaseModel):
-    settled: bool
-    tx_hash: str
-    status: Literal["submitted", "validated"]
-
-
-class XRPLFacilitatorClient:
     def __init__(
         self,
+        config: FacilitatorConfig | dict[str, Any] | None = None,
         *,
-        base_url: str,
-        bearer_token: str,
-        timeout: float = 10.0,
-        async_client: httpx.AsyncClient | None = None,
+        pending_attempts: int = 3,
+        pending_backoff_seconds: tuple[float, ...] = (0.1, 0.25, 0.5),
     ) -> None:
-        self._base_url = base_url.rstrip("/")
-        self._bearer_token = bearer_token
-        self._timeout = timeout
-        self._async_client = async_client
-        self._owns_client = async_client is None
-        self._supported_cache: FacilitatorSupported | None = None
+        super().__init__(config)
+        if pending_attempts < 0:
+            raise ValueError("pending_attempts cannot be negative")
+        self._pending_attempts = pending_attempts
+        self._pending_backoff_seconds = pending_backoff_seconds
 
-    async def startup(self) -> None:
-        await self.get_supported(force_refresh=False)
-
-    async def aclose(self) -> None:
-        if self._async_client is not None and self._owns_client:
-            await self._async_client.aclose()
-
-    async def get_supported(self, *, force_refresh: bool = False) -> FacilitatorSupported:
-        if self._supported_cache is not None and not force_refresh:
-            return self._supported_cache
-
-        response = await self._request("GET", "/supported")
-        supported = CoreFacilitatorSupportedResponse.model_validate(response)
-        self._supported_cache = FacilitatorSupported(
-            network=supported.network,
-            assets=supported.assets,
-            settlement_mode=supported.settlement_mode,
-        )
-        return self._supported_cache
-
-    async def verify_payment(
+    async def settle(
         self,
-        *,
-        signed_tx_blob: str,
-        invoice_id: str | None = None,
-    ) -> FacilitatorVerifyResponse:
-        payload = {"signed_tx_blob": signed_tx_blob}
-        if invoice_id is not None:
-            payload["invoice_id"] = invoice_id
-        response = await self._request(
-            "POST",
-            "/verify",
-            json=payload,
-            authenticated=True,
-            stage="verify",
-        )
-        verify_response = CoreFacilitatorVerifyResponse.model_validate(response)
-        return FacilitatorVerifyResponse(
-            valid=verify_response.valid,
-            invoice_id=verify_response.invoice_id,
-            amount=verify_response.amount,
-            asset=verify_response.asset,
-            amount_details=amount_from_structured_amount(verify_response.amount_details),
-            payer=verify_response.payer,
-            destination=verify_response.destination,
-            message=verify_response.message,
-        )
+        payload: PaymentPayload,
+        requirements: PaymentRequirements,
+    ) -> SettleResponse:
+        result = await super().settle(payload, requirements)
+        for attempt in range(self._pending_attempts):
+            if not _is_pending(result):
+                break
+            delay = self._pending_backoff_seconds[
+                min(attempt, len(self._pending_backoff_seconds) - 1)
+            ] if self._pending_backoff_seconds else 0
+            if delay:
+                await asyncio.sleep(delay)
+            # The same immutable envelope is retried. The facilitator reconciles
+            # the reserved transaction hash and must never rebroadcast it.
+            result = await super().settle(payload, requirements)
+        return result
 
-    async def settle_payment(
-        self,
-        *,
-        signed_tx_blob: str,
-        invoice_id: str | None = None,
-    ) -> FacilitatorSettleResponse:
-        payload = {"signed_tx_blob": signed_tx_blob}
-        if invoice_id is not None:
-            payload["invoice_id"] = invoice_id
-        response = await self._request(
-            "POST",
-            "/settle",
-            json=payload,
-            authenticated=True,
-            stage="settle",
-        )
-        settle_response = CoreFacilitatorSettleResponse.model_validate(response)
-        return FacilitatorSettleResponse(
-            settled=settle_response.settled,
-            tx_hash=settle_response.tx_hash,
-            status=settle_response.status,
-        )
 
-    async def _request(
-        self,
-        method: str,
-        path: str,
-        *,
-        json: dict[str, object] | None = None,
-        authenticated: bool = False,
-        stage: str = "request",
-    ) -> dict[str, object]:
-        client = self._async_client
-        if client is None:
-            client = httpx.AsyncClient(
-                base_url=self._base_url,
-                timeout=self._timeout,
-            )
-            self._async_client = client
+def build_facilitator_client(
+    *,
+    base_url: str,
+    bearer_token: str,
+    timeout: float = 30.0,
+    http_client: Any = None,
+    pending_attempts: int = 3,
+) -> XRPLFacilitatorClient:
+    token = bearer_token.strip()
+    if not token:
+        raise ValueError("bearer_token is required")
+    auth = CreateHeadersAuthProvider(
+        lambda: {
+            "verify": {"Authorization": f"Bearer {token}"},
+            "settle": {"Authorization": f"Bearer {token}"},
+        }
+    )
+    return XRPLFacilitatorClient(
+        FacilitatorConfig(
+            url=base_url,
+            timeout=timeout,
+            http_client=http_client,
+            auth_provider=auth,
+        ),
+        pending_attempts=pending_attempts,
+    )
 
-        headers = {}
-        if authenticated:
-            headers["Authorization"] = f"Bearer {self._bearer_token}"
 
-        try:
-            response = await client.request(method, path, headers=headers, json=json)
-        except httpx.TimeoutException as exc:
-            raise FacilitatorTransportError("Facilitator request timed out") from exc
-        except httpx.HTTPError as exc:
-            raise FacilitatorTransportError("Unable to reach facilitator") from exc
+def _is_pending(result: SettleResponse) -> bool:
+    return (
+        not result.success
+        and result.error_reason == "settlement_pending"
+        and bool(result.transaction)
+        and bool(result.network)
+    )
 
-        if response.status_code >= 500:
-            raise FacilitatorTransportError("Facilitator is unavailable")
 
-        if response.status_code in {401, 402}:
-            raise FacilitatorPaymentError(stage, response.status_code, self._extract_detail(response))
-
-        if response.status_code >= 400:
-            raise FacilitatorProtocolError(
-                f"Facilitator returned unexpected status {response.status_code}: "
-                f"{self._extract_detail(response)}"
-            )
-
-        try:
-            body = response.json()
-        except ValueError as exc:
-            raise FacilitatorProtocolError("Facilitator returned invalid JSON") from exc
-
-        if not isinstance(body, dict):
-            raise FacilitatorProtocolError("Facilitator returned a non-object JSON response")
-        return body
-
-    @staticmethod
-    def _extract_detail(response: httpx.Response) -> str:
-        try:
-            body = response.json()
-        except ValueError:
-            return response.text.strip() or "unknown facilitator error"
-
-        if isinstance(body, dict):
-            detail = body.get("detail") or body.get("error")
-            if isinstance(detail, str) and detail.strip():
-                return detail.strip()
-        return response.text.strip() or "unknown facilitator error"
+__all__ = ["XRPLFacilitatorClient", "build_facilitator_client"]

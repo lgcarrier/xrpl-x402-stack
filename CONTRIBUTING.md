@@ -23,7 +23,7 @@ validation, buyer signing, or the live-test tooling, also run the full
 payment-path check:
 
 ```bash
-RUN_XRPL_TESTNET_LIVE=1 pytest -m live tests/integration/test_live_testnet.py -s
+RUN_XRPL_TESTNET_LIVE=1 pytest -m live tests/integration/test_live_testnet_v2.py -s
 ```
 
 For routine changes outside those areas, the live XRPL Testnet test remains

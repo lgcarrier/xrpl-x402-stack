@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.0
+
+- Pins the official Python protocol runtime to `x402==2.20.0` and makes all wire
+  traffic canonical v2 only.
+- Adds exact XRPL client, resource-server, and facilitator mechanisms for
+  `xrpl:0`, `xrpl:1`, and `xrpl:2`, including sequence and ticket authorization.
+- Enforces master/RegularKey signatures, NetworkID, invoice hashing, destination
+  tags, ledger expiry, fee caps, IOU rules, forbidden fields, and simulation or
+  targeted account checks.
+- Replaces optimistic settlement with validated `tesSUCCESS`, durable Redis
+  transaction reservations, `settlement_pending` reconciliation, and scoped
+  payment-identifier idempotency.
+- Moves HTTP and MCP integrations to upstream wrappers, adds Bazaar discovery,
+  response withholding/recovery, issuer-aware spend controls, and standard
+  receipts.
+- Adds canonical header fixtures, official TypeScript XRPL cross-SDK vectors,
+  real Redis concurrency tests, and opt-in Testnet coverage.
+
+See [the migration guide](docs/migration-0.2.md) for the intentional 0.1 break.
+
 All notable changes to the Open XRPL x402 Stack are documented here.
 
 ## xrpl-x402-facilitator 0.1.1

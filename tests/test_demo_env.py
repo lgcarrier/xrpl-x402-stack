@@ -18,7 +18,9 @@ PRICE_DROPS=1000
 PRICE_ASSET_CODE=XRP
 PRICE_ASSET_ISSUER=
 PRICE_ASSET_AMOUNT=
-PAYMENT_ASSET=XRP:native
+PAYMENT_ASSET=XRP
+PAYMENT_ASSET_ISSUER=
+PAYMENT_MAX_SPEND=1000
 ALLOWED_ISSUED_ASSETS=
 """
 
@@ -69,12 +71,14 @@ def test_demo_env_writes_rlusd_variant_with_extra_allowed_asset(
     assert "PRICE_ASSET_CODE=RLUSD" in rendered
     assert "PRICE_ASSET_ISSUER=rCustomRLUSDIssuer" in rendered
     assert "PRICE_ASSET_AMOUNT=1.25" in rendered
-    assert "PAYMENT_ASSET=RLUSD:rCustomRLUSDIssuer" in rendered
+    assert "PAYMENT_ASSET=RLUSD" in rendered
+    assert "PAYMENT_ASSET_ISSUER=rCustomRLUSDIssuer" in rendered
+    assert "PAYMENT_MAX_SPEND=1.25" in rendered
     assert "ALLOWED_ISSUED_ASSETS=RLUSD:rCustomRLUSDIssuer" in rendered
     assert f"XRPL_WALLET_SEED={wallet_set.buyer_wallet('rlusd').seed}" in rendered
     assert wallet_set.buyer_wallet("xrp").seed not in rendered
     assert f"Buyer address: {wallet_set.buyer_wallet('rlusd').classic_address}" in captured.out
-    assert "Buyer payment asset: RLUSD:rCustomRLUSDIssuer" in captured.out
+    assert "Buyer payment asset: RLUSD" in captured.out
     assert "Facilitator extra issued assets: RLUSD:rCustomRLUSDIssuer" in captured.out
 
 
@@ -106,7 +110,9 @@ def test_demo_env_writes_usdc_variant_without_extra_allowed_asset(
     assert "PRICE_ASSET_CODE=USDC" in rendered
     assert "PRICE_ASSET_ISSUER=rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt" in rendered
     assert "PRICE_ASSET_AMOUNT=2.50" in rendered
-    assert "PAYMENT_ASSET=USDC:rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt" in rendered
+    assert "PAYMENT_ASSET=USDC" in rendered
+    assert "PAYMENT_ASSET_ISSUER=rHuGNhqTG32mfmAvWA8hUyWRLV3tCSwKQt" in rendered
+    assert "PAYMENT_MAX_SPEND=2.50" in rendered
     assert "ALLOWED_ISSUED_ASSETS=" in rendered
     assert f"XRPL_WALLET_SEED={wallet_set.buyer_wallet('usdc').seed}" in rendered
     assert wallet_set.buyer_wallet("xrp").seed not in rendered
@@ -145,7 +151,9 @@ def test_demo_env_writes_xrp_variant_and_resets_issued_asset_fields(
     assert "PRICE_ASSET_CODE=XRP" in rendered
     assert "PRICE_ASSET_ISSUER=" in rendered
     assert "PRICE_ASSET_AMOUNT=" in rendered
-    assert "PAYMENT_ASSET=XRP:native" in rendered
+    assert "PAYMENT_ASSET=XRP" in rendered
+    assert "PAYMENT_ASSET_ISSUER=" in rendered
+    assert "PAYMENT_MAX_SPEND=2500" in rendered
     assert "ALLOWED_ISSUED_ASSETS=" in rendered
     assert f"XRPL_WALLET_SEED={wallet_set.buyer_wallet('xrp').seed}" in rendered
 

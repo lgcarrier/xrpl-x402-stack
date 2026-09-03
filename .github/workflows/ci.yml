@@ -12,6 +12,16 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
 
     steps:
       - name: Check out repository
@@ -28,6 +38,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
           pip install -r docs/requirements.txt
+          python -m pip check
 
       - name: Build package artifacts
         run: |
@@ -57,20 +68,21 @@ jobs:
           python -m pip install "${find_links[@]}" \
             xrpl-x402-core \
             xrpl-x402-facilitator \
-            "xrpl-x402-middleware[x402]" \
-            "xrpl-x402-client[x402]" \
+            "xrpl-x402-middleware[mcp]" \
+            xrpl-x402-client \
             "xrpl-x402-payer[mcp]"
+          python -m pip check
           python - <<'PY'
           import xrpl_x402_core
           from xrpl_x402_facilitator import create_app
-          from xrpl_x402_middleware.adapters.x402 import register_exact_xrpl_server
+          from xrpl_x402_middleware import create_xrpl_mcp_payment_wrapper
           from xrpl_x402_client.adapters.x402 import register_exact_xrpl_client
           from xrpl_x402_payer import XRPLPayer
           import xrpl_x402_payer.mcp as payer_mcp
 
           assert xrpl_x402_core.XRP_CODE == "XRP"
           assert callable(create_app)
-          assert callable(register_exact_xrpl_server)
+          assert callable(create_xrpl_mcp_payment_wrapper)
           assert callable(register_exact_xrpl_client)
           assert XRPLPayer
           assert callable(payer_mcp.main)
@@ -87,6 +99,14 @@ jobs:
       - name: Run pytest
         run: PYTHONPYCACHEPREFIX=/tmp/pycache pytest -q
 
+      - name: Run real Redis concurrency tests
+        env:
+          XRPL_X402_TEST_REDIS_URL: redis://127.0.0.1:6379/15
+        run: PYTHONPYCACHEPREFIX=/tmp/pycache pytest -m redis -q tests/test_redis_settlement_v2.py
+
+      - name: Validate Docker Compose configuration
+        run: docker compose config --quiet
+
       - name: Build Docker image
         run: docker build -t xrpl-x402-facilitator:ci .
 
@@ -94,6 +114,58 @@ jobs:
         run: |
           docker run --rm xrpl-x402-facilitator:ci \
             python -c "import os, pathlib; assert os.getuid() != 0, 'container runs as root'; forbidden = [path for path in ('/app/.git', '/app/.env', '/app/.live-test-wallets') if pathlib.Path(path).exists()]; assert not forbidden, f'unexpected files in image: {forbidden}'"
+
+      - name: Run Docker Compose integration
+        run: |
+          docker compose up --detach --build redis facilitator merchant
+          ready=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --silent --show-error http://127.0.0.1:8000/health >/tmp/facilitator-health.json; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            docker compose logs facilitator merchant redis
+            exit 1
+          fi
+          merchant_ready=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            status="$(curl --silent --output /dev/null \
+              --write-out '%{http_code}' \
+              http://127.0.0.1:8010/premium || true)"
+            if [ "$status" = "402" ]; then
+              merchant_ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$merchant_ready" -ne 1 ]; then
+            docker compose logs facilitator merchant redis
+            exit 1
+          fi
+          redis_ping="$(docker compose exec -T redis redis-cli ping)"
+          test "$redis_ping" = "PONG"
+          status="$(curl --silent --show-error \
+            --dump-header /tmp/merchant-headers.txt \
+            --output /tmp/merchant-body.txt \
+            --write-out '%{http_code}' \
+            http://127.0.0.1:8010/premium)"
+          test "$status" = "402"
+          python - <<'PY'
+          from pathlib import Path
+
+          headers = Path("/tmp/merchant-headers.txt").read_text().splitlines()
+          assert any(
+              line.lower().startswith("payment-required:")
+              for line in headers
+          ), headers
+          PY
+
+      - name: Stop Docker Compose integration
+        if: always()
+        run: docker compose down --volumes --remove-orphans
 
   publish-readiness:
     runs-on: ubuntu-latest
@@ -205,9 +277,10 @@ jobs:
             install_args+=(--find-links "$PWD/packages/client/dist")
           fi
           python -m pip "${install_args[@]}" "$WHEEL_PATH"
+          python -m pip check
           case "${{ matrix.target }}" in
             core)
-              python -c "import xrpl_x402_core as package; assert package.XRP_CODE == 'XRP'"
+              python -c "import json; from pathlib import Path; import xrpl_x402_core as package; fixture=json.loads(Path('tests/fixtures/cross-sdk/typescript-exact-xrpl.json').read_text()); blob=fixture['paymentPayload']['payload']['signedTxBlob']; assert package.XRP_CODE == 'XRP'; assert len(package.signed_transaction_hash(blob)) == 64"
               ;;
             facilitator)
               python -c "from xrpl_x402_facilitator import create_app; assert callable(create_app)"
@@ -235,9 +308,10 @@ jobs:
             install_args+=(--find-links "$PWD/packages/client/dist")
           fi
           python -m pip "${install_args[@]}" "$SDIST_PATH"
+          python -m pip check
           case "${{ matrix.target }}" in
             core)
-              python -c "import xrpl_x402_core as package; assert package.XRP_CODE == 'XRP'"
+              python -c "import json; from pathlib import Path; import xrpl_x402_core as package; fixture=json.loads(Path('tests/fixtures/cross-sdk/typescript-exact-xrpl.json').read_text()); blob=fixture['paymentPayload']['payload']['signedTxBlob']; assert package.XRP_CODE == 'XRP'; assert len(package.signed_transaction_hash(blob)) == 64"
               ;;
             facilitator)
               python -c "from xrpl_x402_facilitator import create_app; assert callable(create_app)"
@@ -256,24 +330,21 @@ jobs:
           esac
 
       - name: Smoke optional extras
-        if: matrix.target == 'middleware' || matrix.target == 'client' || matrix.target == 'payer'
+        if: matrix.target == 'middleware' || matrix.target == 'payer'
         run: |
           python -m venv /tmp/extra-venv
           . /tmp/extra-venv/bin/activate
           python -m pip install --upgrade pip
-          extra_name=x402
+          extra_name=mcp
           install_args=(install --find-links "$PWD/packages/core/dist")
           if [ "${{ matrix.target }}" = "payer" ]; then
-            extra_name=mcp
             install_args+=(--find-links "$PWD/packages/client/dist")
           fi
           python -m pip "${install_args[@]}" "${PACKAGE_NAME}[${extra_name}] @ ${WHEEL_URI}"
+          python -m pip check
           case "${{ matrix.target }}" in
             middleware)
-              python -c "from xrpl_x402_middleware.adapters.x402 import register_exact_xrpl_server; assert callable(register_exact_xrpl_server)"
-              ;;
-            client)
-              python -c "from xrpl_x402_client.adapters.x402 import register_exact_xrpl_client; assert callable(register_exact_xrpl_client)"
+              python -c "from xrpl_x402_middleware import create_xrpl_mcp_payment_wrapper; assert callable(create_xrpl_mcp_payment_wrapper)"
               ;;
             payer)
               python -c "import xrpl_x402_payer.mcp as module; assert callable(module.main)"

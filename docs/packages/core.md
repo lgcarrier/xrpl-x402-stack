@@ -1,31 +1,14 @@
-# xrpl-x402-core
+# Core package
 
-[![PyPI version](https://img.shields.io/pypi/v/xrpl-x402-core?logo=pypi&logoColor=white)](https://pypi.org/project/xrpl-x402-core/)
-[![Source directory](https://img.shields.io/badge/GitHub-packages%2Fcore-181717?logo=github&logoColor=white)](https://github.com/lgcarrier/xrpl-x402-stack/tree/main/packages/core)
+`xrpl-x402-core` re-exports official x402 2.20.0 protocol schemas. The only
+locally owned models are XRPL-specific payload/extra/state records.
 
-Install:
+Important exports include:
 
-```bash
-pip install xrpl-x402-core
-```
+- `PaymentRequired`, `PaymentRequirements`, `PaymentPayload`
+- `VerifyRequest`, `VerifyResponse`, `SettleRequest`, `SettleResponse`
+- `ExactXRPLPayload`, `ExactXRPLExtra`, `XRPLSettlementState`
+- `find_default_asset`, invoice hashing, network and fingerprint helpers
 
-Use `xrpl-x402-core` when you need the shared XRPL/x402 models and helpers directly.
-
-## Main Exports
-
-- `PaymentRequired`
-- `PaymentPayload`
-- `PaymentResponse`
-- `XRPLAsset`
-- `XRPLAmount`
-- `XRPLPaymentOption`
-- `encode_model_to_base64(...)`
-- `decode_model_from_base64(...)`
-- `payment_option_matches(...)`
-
-## What It Owns
-
-- the canonical wire models shared by the facilitator, middleware, and client packages
-- Base64 header codecs for `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, and `PAYMENT-RESPONSE`
-- XRPL asset normalization and exact-payment matching
-- facilitator request and response models used on the wire
+XRP is represented by `asset: "XRP"` with drops. IOUs use their currency code
+and `extra.issuer`; decimals are not a protocol field.

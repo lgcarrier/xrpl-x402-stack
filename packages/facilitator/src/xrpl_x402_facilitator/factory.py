@@ -1,17 +1,33 @@
+from __future__ import annotations
+
+import asyncio
+import base64
 from contextlib import asynccontextmanager
+import json
 import logging
 import secrets
-from typing import Final
+from typing import Any, Final
 
 import structlog
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from x402 import x402FacilitatorSync
+from x402.extensions.bazaar import BAZAAR
+from x402.interfaces import FacilitatorExtension
 
+from xrpl_x402_core import (
+    SettleRequest,
+    SettleResponse,
+    VerifyRequest,
+    VerifyResponse,
+)
+from xrpl_x402_facilitator.catalog import BazaarCatalog
 from xrpl_x402_facilitator.config import Settings, get_settings
 from xrpl_x402_facilitator.gateway_auth import (
     AuthenticatedGateway,
@@ -19,12 +35,19 @@ from xrpl_x402_facilitator.gateway_auth import (
     GatewayAuthenticator,
     build_gateway_authenticator,
 )
-from xrpl_x402_facilitator.models import PaymentRequest, SettleResponse, SupportedResponse, VerifyResponse
+from xrpl_x402_facilitator.idempotency import PaymentIdentifierStore
 from xrpl_x402_facilitator.redis_utils import create_async_redis_client
-from xrpl_x402_facilitator.xrpl_service import XRPLService
+from xrpl_x402_facilitator.xrpl_service import (
+    ExactXRPLFacilitatorScheme,
+    XRPLService,
+)
 
-PAYMENT_ENDPOINT_PATHS: Final[frozenset[str]] = frozenset({"/verify", "/settle"})
-AUTHENTICATION_ERROR_DETAIL: Final[str] = "Invalid authentication credentials"
+PAYMENT_ENDPOINT_PATHS: Final[frozenset[str]] = frozenset(
+    {"/verify", "/settle"}
+)
+AUTHENTICATION_ERROR_DETAIL: Final[str] = (
+    "Invalid authentication credentials"
+)
 AUTHENTICATED_GATEWAY_STATE_KEY: Final[str] = "authenticated_gateway"
 GATEWAY_AUTH_FAILED_STATE_KEY: Final[str] = "gateway_auth_failed"
 RATE_LIMIT_STORAGE_KEY_PREFIX: Final[str] = "facilitator:ratelimit"
@@ -39,7 +62,9 @@ class BodySizeLimitMiddleware:
         self.app = app
         self.max_body_bytes = max_body_bytes
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+    async def __call__(
+        self, scope: Scope, receive: Receive, send: Send
+    ) -> None:
         if (
             scope["type"] != "http"
             or scope["method"] != "POST"
@@ -47,17 +72,14 @@ class BodySizeLimitMiddleware:
         ):
             await self.app(scope, receive, send)
             return
-
-        headers = Headers(scope=scope)
-        content_length = headers.get("content-length")
-        if content_length is not None:
-            try:
-                if int(content_length) > self.max_body_bytes:
-                    await self._send_413(scope, receive, send)
-                    return
-            except ValueError:
-                pass
-
+        content_length = Headers(scope=scope).get("content-length")
+        if (
+            content_length
+            and content_length.isdigit()
+            and int(content_length) > self.max_body_bytes
+        ):
+            await self._send_413(scope, receive, send)
+            return
         received_bytes = 0
 
         async def limited_receive() -> Message:
@@ -74,22 +96,21 @@ class BodySizeLimitMiddleware:
         except PayloadTooLargeError:
             await self._send_413(scope, receive, send)
 
-    async def _send_413(self, scope: Scope, receive: Receive, send: Send) -> None:
-        response = JSONResponse(
-            status_code=413,
-            content={"detail": "Request body too large"},
-        )
-        await response(scope, receive, send)
+    @staticmethod
+    async def _send_413(
+        scope: Scope, receive: Receive, send: Send
+    ) -> None:
+        await JSONResponse(
+            status_code=413, content={"detail": "Request body too large"}
+        )(scope, receive, send)
 
 
 def configure_logging() -> None:
-    timestamper = structlog.processors.TimeStamper(fmt="iso")
-
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
             structlog.stdlib.add_log_level,
-            timestamper,
+            structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.dict_tracebacks,
             structlog.processors.JSONRenderer(),
         ],
@@ -105,29 +126,14 @@ logger = structlog.get_logger()
 
 
 def build_rate_limiter(settings: Settings) -> Limiter:
-    limiter_kwargs: dict[str, object] = {
-        "key_func": get_remote_address,
-        "storage_uri": settings.REDIS_URL.get_secret_value(),
-        "key_prefix": RATE_LIMIT_STORAGE_KEY_PREFIX,
-    }
-
-    try:
-        limiter = Limiter(**limiter_kwargs)
-    except Exception as exc:
-        raise RuntimeError("Unable to initialize Redis-backed rate limiter") from exc
-
+    limiter = Limiter(
+        key_func=get_remote_address,
+        storage_uri=settings.REDIS_URL.get_secret_value(),
+        key_prefix=RATE_LIMIT_STORAGE_KEY_PREFIX,
+    )
     storage = getattr(limiter, "_storage", None)
-    if storage is None:
-        raise RuntimeError("Redis-backed rate limiter did not expose a storage backend")
-
-    try:
-        if not storage.check():
-            raise RuntimeError("Redis-backed rate limiter storage is unavailable")
-    except RuntimeError:
-        raise
-    except Exception as exc:
-        raise RuntimeError("Redis-backed rate limiter storage is unavailable") from exc
-
+    if storage is None or not storage.check():
+        raise RuntimeError("Redis-backed rate limiter storage is unavailable")
     return limiter
 
 
@@ -136,138 +142,406 @@ def create_app(
     xrpl_service: XRPLService | None = None,
     gateway_authenticator: GatewayAuthenticator | None = None,
 ) -> FastAPI:
-    active_settings = app_settings or get_settings()
-    redis_client = None
-    if xrpl_service is None or (
-        gateway_authenticator is None and active_settings.gateway_auth_uses_redis()
-    ):
-        redis_client = create_async_redis_client(active_settings.REDIS_URL.get_secret_value())
-
-    active_xrpl_service = xrpl_service or XRPLService(active_settings, redis_client=redis_client)
-    active_gateway_auth = gateway_authenticator or build_gateway_authenticator(
-        active_settings,
-        redis_client=redis_client,
+    settings = app_settings or get_settings()
+    async_redis = create_async_redis_client(
+        settings.REDIS_URL.get_secret_value()
     )
-    limiter = build_rate_limiter(active_settings)
-
-    def _payment_rate_limit_key(request: Request) -> str:
-        gateway_id = getattr(request.state, "gateway_id", None)
-        if isinstance(gateway_id, str) and gateway_id:
-            return f"gateway:{gateway_id}"
-        return f"ip:{get_remote_address(request)}"
+    mechanism = xrpl_service or ExactXRPLFacilitatorScheme(settings)
+    facilitator = x402FacilitatorSync().register(
+        [settings.NETWORK_ID], mechanism
+    )
+    facilitator.register_extension(
+        FacilitatorExtension(key="payment-identifier")
+    )
+    if settings.ENABLE_BAZAAR:
+        facilitator.register_extension(BAZAAR)
+    gateway_auth = gateway_authenticator or build_gateway_authenticator(
+        settings, redis_client=async_redis
+    )
+    limiter = build_rate_limiter(settings)
+    identifiers = PaymentIdentifierStore(
+        async_redis,
+        ttl_seconds=max(settings.REPLAY_PROCESSED_TTL_SECONDS, 300),
+    )
+    catalog = BazaarCatalog(
+        async_redis,
+        retention_seconds=settings.DISCOVERY_RETENTION_SECONDS,
+    )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         try:
             yield
         finally:
-            if redis_client is not None:
-                await redis_client.aclose()
+            await async_redis.aclose()
 
     app = FastAPI(
         title="XRPL x402 Facilitator",
         description=(
-            "Self-hosted x402 facilitator for verifying and settling presigned XRPL "
-            "payment transactions."
+            "Non-custodial x402 v2 facilitator for exact XRPL payments."
         ),
-        version="0.1.0",
-        docs_url="/docs" if active_settings.ENABLE_API_DOCS else None,
-        redoc_url="/redoc" if active_settings.ENABLE_API_DOCS else None,
-        openapi_url="/openapi.json" if active_settings.ENABLE_API_DOCS else None,
+        version="0.2.0",
+        docs_url="/docs" if settings.ENABLE_API_DOCS else None,
+        redoc_url="/redoc" if settings.ENABLE_API_DOCS else None,
+        openapi_url=(
+            "/openapi.json" if settings.ENABLE_API_DOCS else None
+        ),
         lifespan=lifespan,
     )
     app.add_middleware(
         BodySizeLimitMiddleware,
-        max_body_bytes=active_settings.MAX_REQUEST_BODY_BYTES,
+        max_body_bytes=settings.MAX_REQUEST_BODY_BYTES,
     )
-    app.state.settings = active_settings
-    app.state.xrpl = active_xrpl_service
+    app.state.settings = settings
+    app.state.xrpl = mechanism
+    app.state.facilitator = facilitator
     app.state.limiter = limiter
-    app.state.gateway_auth = active_gateway_auth
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.state.gateway_auth = gateway_auth
+    app.state.catalog = catalog
+    app.add_exception_handler(
+        RateLimitExceeded, _rate_limit_exceeded_handler
+    )
 
     @app.middleware("http")
-    async def request_context(request: Request, call_next):  # type: ignore[no-untyped-def]
+    async def request_context(request: Request, call_next):
         structlog.contextvars.clear_contextvars()
         try:
-            if request.method == "POST" and request.url.path in PAYMENT_ENDPOINT_PATHS:
+            if (
+                request.method == "POST"
+                and request.url.path in PAYMENT_ENDPOINT_PATHS
+            ):
                 authorization = request.headers.get("authorization")
                 scheme, _, token = (
-                    authorization.partition(" ") if authorization else ("", "", "")
+                    authorization.partition(" ")
+                    if authorization
+                    else ("", "", "")
                 )
-                if (
-                    not authorization
-                    or not secrets.compare_digest(scheme.lower(), "bearer")
-                    or not token
+                if not token or not secrets.compare_digest(
+                    scheme.lower(), "bearer"
                 ):
-                    setattr(request.state, GATEWAY_AUTH_FAILED_STATE_KEY, True)
+                    setattr(
+                        request.state,
+                        GATEWAY_AUTH_FAILED_STATE_KEY,
+                        True,
+                    )
                 else:
                     try:
-                        gateway = await active_gateway_auth.authenticate(token.strip())
+                        gateway = await gateway_auth.authenticate(token.strip())
                     except GatewayAuthenticationError as exc:
-                        logger.warning("payment_auth_failed", error=str(exc))
-                        setattr(request.state, GATEWAY_AUTH_FAILED_STATE_KEY, True)
+                        logger.warning(
+                            "payment_auth_failed", error=str(exc)
+                        )
+                        setattr(
+                            request.state,
+                            GATEWAY_AUTH_FAILED_STATE_KEY,
+                            True,
+                        )
                     else:
-                        setattr(request.state, AUTHENTICATED_GATEWAY_STATE_KEY, gateway)
+                        setattr(
+                            request.state,
+                            AUTHENTICATED_GATEWAY_STATE_KEY,
+                            gateway,
+                        )
                         request.state.gateway_id = gateway.gateway_id
-                        structlog.contextvars.bind_contextvars(gateway_id=gateway.gateway_id)
+                        structlog.contextvars.bind_contextvars(
+                            gateway_id=gateway.gateway_id
+                        )
             return await call_next(request)
         finally:
             structlog.contextvars.clear_contextvars()
 
-    def _unauthorized() -> HTTPException:
-        return HTTPException(
-            status_code=401,
-            detail=AUTHENTICATION_ERROR_DETAIL,
-            headers={"WWW-Authenticate": "Bearer"},
+    def require_gateway(request: Request) -> AuthenticatedGateway:
+        gateway = getattr(
+            request.state, AUTHENTICATED_GATEWAY_STATE_KEY, None
         )
-
-    def _require_authenticated_gateway(request: Request) -> AuthenticatedGateway:
-        gateway = getattr(request.state, AUTHENTICATED_GATEWAY_STATE_KEY, None)
-        if gateway is None or getattr(request.state, GATEWAY_AUTH_FAILED_STATE_KEY, False):
-            raise _unauthorized()
+        if gateway is None or getattr(
+            request.state, GATEWAY_AUTH_FAILED_STATE_KEY, False
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail=AUTHENTICATION_ERROR_DETAIL,
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         return gateway
+
+    def payment_rate_limit_key(request: Request) -> str:
+        gateway_id = getattr(request.state, "gateway_id", None)
+        return (
+            f"gateway:{gateway_id}"
+            if gateway_id
+            else f"ip:{get_remote_address(request)}"
+        )
 
     @app.get("/health")
     async def health() -> dict[str, str]:
-        return {"status": "healthy", "network": active_settings.NETWORK_ID}
+        return {
+            "status": "healthy",
+            "network": settings.NETWORK_ID,
+            "x402Version": "2",
+        }
 
-    @app.get("/supported", response_model=SupportedResponse)
-    async def supported() -> SupportedResponse:
-        return SupportedResponse(
-            network=active_settings.NETWORK_ID,
-            assets=active_xrpl_service.supported_assets(),
-            settlement_mode=active_settings.SETTLEMENT_MODE,
+    @app.get("/supported")
+    async def supported() -> dict[str, Any]:
+        return facilitator.get_supported().model_dump(
+            by_alias=True, exclude_none=True
         )
 
     @app.post("/verify", response_model=VerifyResponse)
-    @limiter.limit("30/minute", key_func=_payment_rate_limit_key)
+    @limiter.limit("30/minute", key_func=payment_rate_limit_key)
     async def verify(
-        request: Request,
-        body: PaymentRequest,
+        request: Request, raw_body: dict[str, Any]
     ) -> VerifyResponse:
-        _require_authenticated_gateway(request)
-        if not body.signed_tx_blob:
-            raise HTTPException(status_code=400, detail="signed_tx_blob required")
-        try:
-            return await active_xrpl_service.verify_payment(body.signed_tx_blob, body.invoice_id)
-        except ValueError as exc:
-            logger.warning("verify_failed", error=str(exc))
-            raise HTTPException(status_code=402, detail=str(exc)) from exc
+        require_gateway(request)
+        body = _parse_request(raw_body, VerifyRequest)
+        # A payment identifier binds retries to one immutable request, but a
+        # successful verification is deliberately never cached. XRPL account
+        # sequence, RegularKey, ticket, balance, and ledger-expiry state can
+        # change between requests, so every authorization attempt must be
+        # checked against current ledger state.
+        await identifiers.bind(
+            body.payment_payload, body.payment_requirements
+        )
+        result = await asyncio.to_thread(
+            facilitator.verify,
+            body.payment_payload,
+            body.payment_requirements,
+        )
+        return result
 
     @app.post("/settle", response_model=SettleResponse)
-    @limiter.limit("20/minute", key_func=_payment_rate_limit_key)
+    @limiter.limit("20/minute", key_func=payment_rate_limit_key)
     async def settle(
         request: Request,
-        body: PaymentRequest,
+        response: Response,
+        raw_body: dict[str, Any],
     ) -> SettleResponse:
-        _require_authenticated_gateway(request)
-        if not body.signed_tx_blob:
-            raise HTTPException(status_code=400, detail="signed_tx_blob required")
-        try:
-            return await active_xrpl_service.settle_payment(body.signed_tx_blob, body.invoice_id)
-        except ValueError as exc:
-            logger.error("settlement_failed", error=str(exc))
-            raise HTTPException(status_code=402, detail=f"Settlement failed: {exc}") from exc
+        require_gateway(request)
+        body = _parse_request(raw_body, SettleRequest)
+        cache_key, cached = await identifiers.get_cached(
+            "settle", body.payment_payload, body.payment_requirements
+        )
+        if (
+            cached is not None
+            and cached.get("errorReason") != "settlement_pending"
+        ):
+            return SettleResponse.model_validate(cached)
+        result = await asyncio.to_thread(
+            facilitator.settle,
+            body.payment_payload,
+            body.payment_requirements,
+        )
+        if result.success and settings.ENABLE_BAZAAR:
+            cataloged = await catalog.index(
+                body.payment_payload, body.payment_requirements
+            )
+            if cataloged:
+                extension_result = {"bazaar": {"status": "success"}}
+                result = result.model_copy(
+                    update={"extensions": extension_result}
+                )
+                response.headers["EXTENSION-RESPONSES"] = (
+                    _encode_extension_response(extension_result)
+                )
+        serialized = result.model_dump(
+            by_alias=True, exclude_none=True
+        )
+        if result.error_reason != "settlement_pending":
+            await identifiers.put(cache_key, "settle", serialized)
+        return result
+
+    @app.get("/discovery/resources")
+    async def discovery_resources(
+        type: str | None = None,
+        pay_to: str | None = Query(default=None, alias="payTo"),
+        scheme: str | None = None,
+        network: str | None = None,
+        extensions: str | None = None,
+        limit: int = Query(default=20, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+    ) -> dict[str, Any]:
+        if not settings.ENABLE_BAZAAR:
+            raise HTTPException(
+                status_code=404,
+                detail="Bazaar discovery is disabled",
+            )
+        return await catalog.list(
+            resource_type=type,
+            pay_to=pay_to,
+            scheme=scheme,
+            network=network,
+            extension=extensions,
+            limit=limit,
+            offset=offset,
+        )
+
+    @app.get("/discovery/search")
+    async def discovery_search(
+        query: str = Query(min_length=1),
+        type: str | None = None,
+        pay_to: str | None = Query(default=None, alias="payTo"),
+        scheme: str | None = None,
+        network: str | None = None,
+        extensions: str | None = None,
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = None,
+    ) -> dict[str, Any]:
+        if not settings.ENABLE_BAZAAR:
+            raise HTTPException(
+                status_code=404,
+                detail="Bazaar discovery is disabled",
+            )
+        offset = _decode_cursor(cursor)
+        result = await catalog.list(
+            resource_type=type,
+            pay_to=pay_to,
+            scheme=scheme,
+            network=network,
+            extension=extensions,
+            limit=limit,
+            offset=offset,
+            query=query,
+        )
+        items = result.pop("items")
+        total = result["pagination"]["total"]
+        next_offset = offset + len(items)
+        return {
+            "x402Version": 2,
+            "resources": items,
+            "partialResults": next_offset < total,
+            "pagination": {
+                "limit": limit,
+                "cursor": (
+                    _encode_cursor(next_offset)
+                    if next_offset < total
+                    else None
+                ),
+            },
+        }
 
     return app
+
+
+def _parse_request(
+    raw: dict[str, Any],
+    model_type: type[VerifyRequest] | type[SettleRequest],
+):
+    _validate_canonical_wire_fields(raw)
+    try:
+        body = model_type.model_validate(raw)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=400, detail=exc.errors(include_url=False)
+        ) from exc
+    if body.x402_version != 2 or body.payment_payload.x402_version != 2:
+        raise HTTPException(
+            status_code=400, detail="Only x402Version 2 is supported"
+        )
+    return body
+
+
+_FACILITATOR_FIELDS = frozenset(
+    {"x402Version", "paymentPayload", "paymentRequirements"}
+)
+_PAYMENT_PAYLOAD_FIELDS = frozenset(
+    {"x402Version", "payload", "accepted", "resource", "extensions"}
+)
+_PAYMENT_REQUIREMENTS_FIELDS = frozenset(
+    {
+        "scheme",
+        "network",
+        "asset",
+        "amount",
+        "payTo",
+        "maxTimeoutSeconds",
+        "extra",
+    }
+)
+_XRPL_PAYLOAD_FIELDS = frozenset({"signedTxBlob"})
+_XRPL_EXTRA_FIELDS = frozenset(
+    {
+        "issuer",
+        "areFeesSponsored",
+        "assetTransferMethod",
+        "invoiceId",
+        "destinationTag",
+    }
+)
+_RESOURCE_FIELDS = frozenset(
+    {"url", "description", "mimeType", "serviceName", "tags", "iconUrl"}
+)
+
+
+def _validate_canonical_wire_fields(raw: dict[str, Any]) -> None:
+    """Reject aliases and unknown fields ignored by permissive upstream models."""
+
+    _reject_unexpected_fields(raw, _FACILITATOR_FIELDS, "facilitator request")
+    payload = raw.get("paymentPayload")
+    _reject_unexpected_fields(
+        payload, _PAYMENT_PAYLOAD_FIELDS, "paymentPayload"
+    )
+    if isinstance(payload, dict):
+        _reject_unexpected_fields(
+            payload.get("payload"),
+            _XRPL_PAYLOAD_FIELDS,
+            "paymentPayload.payload",
+        )
+        _validate_requirements_fields(
+            payload.get("accepted"), "paymentPayload.accepted"
+        )
+        _reject_unexpected_fields(
+            payload.get("resource"),
+            _RESOURCE_FIELDS,
+            "paymentPayload.resource",
+        )
+    _validate_requirements_fields(
+        raw.get("paymentRequirements"), "paymentRequirements"
+    )
+
+
+def _validate_requirements_fields(value: Any, path: str) -> None:
+    _reject_unexpected_fields(value, _PAYMENT_REQUIREMENTS_FIELDS, path)
+    if isinstance(value, dict):
+        _reject_unexpected_fields(
+            value.get("extra"), _XRPL_EXTRA_FIELDS, f"{path}.extra"
+        )
+
+
+def _reject_unexpected_fields(
+    value: Any, allowed: frozenset[str], path: str
+) -> None:
+    if not isinstance(value, dict):
+        return
+    unexpected = set(value) - allowed
+    if unexpected:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unexpected fields at {path}: "
+                + ", ".join(sorted(unexpected))
+            ),
+        )
+
+
+def _encode_extension_response(value: dict[str, Any]) -> str:
+    raw = json.dumps(
+        value, sort_keys=True, separators=(",", ":")
+    ).encode()
+    return base64.b64encode(raw).decode("ascii")
+
+
+def _encode_cursor(offset: int) -> str:
+    return base64.urlsafe_b64encode(str(offset).encode()).decode("ascii")
+
+
+def _decode_cursor(cursor: str | None) -> int:
+    if not cursor:
+        return 0
+    try:
+        return max(
+            0,
+            int(base64.urlsafe_b64decode(cursor.encode()).decode()),
+        )
+    except (ValueError, UnicodeDecodeError):
+        raise HTTPException(
+            status_code=400, detail="Invalid discovery cursor"
+        ) from None

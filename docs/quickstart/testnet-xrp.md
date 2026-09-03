@@ -85,7 +85,7 @@ That lets local agents call `pay_url` directly instead of shelling out to a buye
 - the merchant challenged the first request with `402 Payment Required`
 - the buyer decoded `PAYMENT-REQUIRED`, signed an exact XRP payment, and retried once
 - the facilitator verified and settled the presigned transaction
-- the middleware injected `request.state.x402_payment` and returned the protected content
+- the middleware settled after the handler, attached the standard payment context, and released the protected content
 
 ## Useful Files
 
