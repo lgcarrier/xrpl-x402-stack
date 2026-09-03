@@ -224,6 +224,9 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
+          # TestPyPI versions are immutable. Allow a failed post-upload verifier
+          # to be retried without weakening production PyPI publication.
+          skip-existing: true
 
   verify-testpypi-install:
     if: github.event_name == 'workflow_dispatch'
@@ -236,13 +239,49 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Download release wheels from TestPyPI
+        env:
+          PACKAGE_NAME: ${{ needs.resolve.outputs.package_name }}
+          PACKAGE_VERSION: ${{ needs.resolve.outputs.package_version }}
+          CORE_REQUIREMENT: ${{ needs.resolve.outputs.core_requirement }}
+          CLIENT_REQUIREMENT: ${{ needs.resolve.outputs.client_requirement }}
+          TESTPYPI_INDEX_URL: ${{ needs.resolve.outputs.index_url }}
+        run: |
+          rm -rf /tmp/testpypi-wheelhouse
+          mkdir -p /tmp/testpypi-wheelhouse
+
+          requirements=("${PACKAGE_NAME}==${PACKAGE_VERSION}")
+          for requirement in "$CORE_REQUIREMENT" "$CLIENT_REQUIREMENT"; do
+            if [ -n "$requirement" ]; then
+              requirements+=("$requirement")
+            fi
+          done
+
+          for requirement in "${requirements[@]}"; do
+            for attempt in 1 2 3 4 5 6; do
+              if python -m pip download \
+                --no-deps \
+                --only-binary=:all: \
+                --dest /tmp/testpypi-wheelhouse \
+                --index-url "$TESTPYPI_INDEX_URL" \
+                "$requirement"; then
+                break
+              fi
+              if [ "$attempt" -eq 6 ]; then
+                echo "Unable to download $requirement from TestPyPI" >&2
+                exit 1
+              fi
+              sleep 15
+            done
+          done
+
       - name: Verify clean install from TestPyPI
         env:
           TARGET: ${{ needs.resolve.outputs.target }}
           PACKAGE_NAME: ${{ needs.resolve.outputs.package_name }}
           PACKAGE_VERSION: ${{ needs.resolve.outputs.package_version }}
-          INDEX_URL: ${{ needs.resolve.outputs.index_url }}
-          EXTRA_INDEX_URL: ${{ needs.resolve.outputs.extra_index_url }}
+          PYPI_INDEX_URL: ${{ needs.resolve.outputs.extra_index_url }}
+          WHEELHOUSE: /tmp/testpypi-wheelhouse
         run: |
           verify_install() {
             requirement="$1"
@@ -254,12 +293,13 @@ jobs:
               . "$venv_path/bin/activate"
               python -m pip install --upgrade pip
 
-              args=(install --index-url "$INDEX_URL")
-              if [ -n "$EXTRA_INDEX_URL" ]; then
-                args+=(--extra-index-url "$EXTRA_INDEX_URL")
-              fi
-
-              if python -m pip "${args[@]}" "$requirement"; then
+              # Only our exact release wheels come from TestPyPI. Resolve all
+              # third-party dependencies from PyPI so a higher-version package
+              # on TestPyPI cannot shadow a production dependency.
+              if python -m pip install \
+                --index-url "$PYPI_INDEX_URL" \
+                --find-links "$WHEELHOUSE" \
+                "$requirement"; then
                 case "$TARGET" in
                   core)
                     python -c "import xrpl_x402_core as package; assert package.XRP_CODE == 'XRP'"
